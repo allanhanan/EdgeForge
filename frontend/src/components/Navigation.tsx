@@ -121,6 +121,8 @@ export const Navigation: React.FC<NavigationProps> = ({
           return (
             <button
               key={tab.id}
+              id={`tab-${tab.id}`}
+              data-testid={`tab-${tab.id}`}
               onClick={() => setActiveTab(tab.id as TabType)}
               className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors whitespace-nowrap ${
                 isActive

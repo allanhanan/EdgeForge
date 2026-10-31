@@ -63,6 +63,12 @@ backend/storage/exports/*
 backend/storage/calibration/*
 !backend/storage/calibration/.gitkeep
 
+# Verification and testing artifacts
+verification_screenshots/
+*.png
+*.jpg
+!sample_assets/datasets/edge_val_dataset/images/*.jpg
+
 # OS & Editor
 .DS_Store
 Thumbs.db
