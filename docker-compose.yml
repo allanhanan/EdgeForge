@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: edgeforge-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - META_API_KEY=${META_API_KEY:-}
+      - META_API_BASE_URL=${META_API_BASE_URL:-https://api.meta.ai/v1}
+      - META_MODEL=${META_MODEL:-muse-spark-v1}
+      - AGENT_OFFLINE_MODE=${AGENT_OFFLINE_MODE:-true}
+    volumes:
+      - edgeforge_storage:/app/backend/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: edgeforge-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  edgeforge_storage:

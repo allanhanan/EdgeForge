@@ -1,0 +1,57 @@
+name: EdgeForge CI Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  backend-test:
+    name: Backend Tests & ML Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install Dependencies
+        run: |
+          uv venv --python 3.11 .venv
+          uv pip install --python .venv/bin/python fastapi "uvicorn[standard]" pydantic python-multipart aiofiles httpx sqlalchemy aiosqlite psutil pynvml pillow pytest pytest-asyncio pyyaml "numpy<2.0" onnx onnxruntime greenlet onnxscript torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Generate Sample Model
+        run: .venv/bin/python sample_assets/init_samples.py
+
+      - name: Run Pytest Suite
+        run: PYTHONPATH=. .venv/bin/pytest backend/tests/ -v
+
+  frontend-build:
+    name: Frontend Build & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10.30.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install Dependencies
+        run: cd frontend && pnpm install --frozen-lockfile
+
+      - name: Build Next.js Application
+        run: cd frontend && pnpm build

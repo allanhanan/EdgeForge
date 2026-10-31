@@ -1,0 +1,4 @@
+names: ['drone', 'vehicle', 'pedestrian', 'sensor']
+nc: 4
+train: images
+val: images
