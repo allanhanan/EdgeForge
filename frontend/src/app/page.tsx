@@ -211,10 +211,17 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-zinc-900 bg-zinc-950 py-4 px-6 text-center text-xs text-zinc-400 font-mono">
-        <p>
-          EdgeForge • Meta Global AI Developer Hackathon 2026 • Vendor-Neutral Edge AI Platform
-        </p>
+      <footer className="border-t border-zinc-800/60 bg-zinc-950/70 py-6 px-6 text-center text-xs text-zinc-500 font-mono backdrop-blur-md">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-zinc-400">
+            <span className="font-semibold text-zinc-300">EdgeForge v1.0</span>
+            <span>•</span>
+            <span>Vendor-Neutral Edge AI Intelligence Engine</span>
+          </div>
+          <p className="text-[11px] text-zinc-500">
+            Meta Global AI Developer Hackathon 2026 • Verified Physical & In-Memory Profiling
+          </p>
+        </div>
       </footer>
     </div>
   );

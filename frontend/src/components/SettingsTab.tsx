@@ -78,9 +78,9 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
         <div>
-          <h2 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
+          <h2 className="text-xl font-bold tracking-tight text-zinc-100 flex items-center gap-2 font-sans">
             <Settings className="h-5 w-5 text-teal-400" />
             System Architecture & Diagnostics
           </h2>
@@ -95,7 +95,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             if (onRefreshAll) onRefreshAll();
           }}
           disabled={isPinging}
-          className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs font-mono text-zinc-200 hover:bg-zinc-700 transition-all disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-xl border border-zinc-700/80 bg-zinc-800/80 px-4 py-2 text-xs font-mono text-zinc-200 hover:bg-zinc-700 transition-all disabled:opacity-50 font-semibold"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${isPinging ? "animate-spin" : ""}`} />
           Run Health Diagnostic
@@ -104,8 +104,8 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Meta AI Provider Configuration */}
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4">
-          <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+        <div className="glass-panel rounded-2xl p-5 sm:p-6 space-y-4 shadow-xl">
+          <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
             <div className="flex items-center gap-2">
               <Bot className="h-4 w-4 text-teal-400" />
               <h3 className="text-sm font-semibold text-zinc-200">
@@ -113,7 +113,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               </h3>
             </div>
             <span
-              className={`rounded px-2 py-0.5 text-[10px] font-mono uppercase font-semibold ${
+              className={`rounded-md px-2.5 py-0.5 text-[10px] font-mono uppercase font-semibold ${
                 isOnlineMode
                   ? "bg-emerald-950/80 border border-emerald-500/40 text-emerald-300"
                   : "bg-purple-950/80 border border-purple-500/40 text-purple-300"
@@ -123,8 +123,8 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             </span>
           </div>
 
-          <div className="space-y-2.5 text-xs font-mono">
-            <div className="rounded-lg bg-zinc-950 p-3 border border-zinc-800 space-y-1.5 text-zinc-300">
+          <div className="space-y-3 text-xs font-mono">
+            <div className="rounded-xl bg-zinc-950/80 p-3.5 border border-zinc-800 space-y-2 text-zinc-300 shadow-inner">
               <div className="flex justify-between">
                 <span className="text-zinc-400">Target Model:</span>
                 <span className="text-teal-400 font-semibold">{activeMeta?.model || "Meta Muse Spark"}</span>
@@ -135,19 +135,19 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-400">API Key Configured:</span>
-                <span className={activeMeta?.configured ? "text-emerald-400" : "text-amber-400"}>
+                <span className={activeMeta?.configured ? "text-emerald-400 font-semibold" : "text-amber-400 font-semibold"}>
                   {activeMeta?.configured ? "Configured" : "Unset (Graceful Offline Fallback)"}
                 </span>
               </div>
             </div>
 
             {/* Philosophy Box */}
-            <div className="rounded-lg bg-zinc-950/60 p-3 border border-zinc-800 text-[11px] text-zinc-400 space-y-1">
-              <span className="text-zinc-200 font-semibold block flex items-center gap-1.5">
+            <div className="rounded-xl bg-zinc-950/60 p-3.5 border border-zinc-800 text-[11px] text-zinc-400 space-y-1">
+              <span className="text-zinc-200 font-semibold block flex items-center gap-1.5 font-sans">
                 <Shield className="h-3.5 w-3.5 text-teal-400" />
                 Dual-Mode Reliability Guarantee
               </span>
-              <p>
+              <p className="leading-relaxed">
                 When valid Meta API credentials are present, queries leverage Meta Muse Spark directly.
                 If offline or credentials are unset, EdgeForge seamlessly falls back to a deterministic,
                 mathematically verified local solver, ensuring 100% reproducible hackathon evaluation.
@@ -157,8 +157,8 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         </div>
 
         {/* Backend Diagnostic & Health */}
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4">
-          <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+        <div className="glass-panel rounded-2xl p-5 sm:p-6 space-y-4 shadow-xl">
+          <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
             <div className="flex items-center gap-2">
               <Server className="h-4 w-4 text-emerald-400" />
               <h3 className="text-sm font-semibold text-zinc-200">
@@ -166,14 +166,14 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               </h3>
             </div>
             {healthPingMs !== null && (
-              <span className="text-[10px] text-zinc-400 font-mono">
+              <span className="text-[10px] text-emerald-400 font-mono bg-emerald-950/60 border border-emerald-500/30 rounded px-2 py-0.5">
                 Ping: {healthPingMs}ms
               </span>
             )}
           </div>
 
-          <div className="space-y-2.5 text-xs font-mono">
-            <div className="rounded-lg bg-zinc-950 p-3 border border-zinc-800 space-y-1.5 text-zinc-300">
+          <div className="space-y-3 text-xs font-mono">
+            <div className="rounded-xl bg-zinc-950/80 p-3.5 border border-zinc-800 space-y-2 text-zinc-300 shadow-inner">
               <div className="flex justify-between">
                 <span className="text-zinc-400">Service Status:</span>
                 <span className="text-emerald-400 font-bold flex items-center gap-1">
@@ -183,11 +183,11 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-400">Service Name:</span>
-                <span className="text-zinc-200">{healthStatus?.service || "EdgeForge Backend"}</span>
+                <span className="text-zinc-200 font-medium">{healthStatus?.service || "EdgeForge Backend"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-400">Engine Version:</span>
-                <span className="text-teal-400">{healthStatus?.version || "1.0.0"}</span>
+                <span className="text-teal-400 font-semibold">{healthStatus?.version || "1.0.0"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-400">Local Proxy Route:</span>
@@ -195,12 +195,12 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               </div>
             </div>
 
-            <div className="rounded-lg bg-zinc-950/60 p-3 border border-zinc-800 text-[11px] text-zinc-400 space-y-1">
-              <span className="text-zinc-200 font-semibold block flex items-center gap-1.5">
+            <div className="rounded-xl bg-zinc-950/60 p-3.5 border border-zinc-800 text-[11px] text-zinc-400 space-y-1">
+              <span className="text-zinc-200 font-semibold block flex items-center gap-1.5 font-sans">
                 <Zap className="h-3.5 w-3.5 text-emerald-400" />
                 High-Performance Microservice
               </span>
-              <p>
+              <p className="leading-relaxed">
                 Powered by FastAPI async ASGI worker, SQLite with async SQLAlchemy 2.0, ONNX Runtime with CUDA EP, and NVML hardware monitoring.
               </p>
             </div>
@@ -209,8 +209,8 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
       </div>
 
       {/* Database & Storage Statistics */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4">
-        <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+      <div className="glass-panel rounded-2xl p-5 sm:p-6 space-y-4 shadow-xl">
+        <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
           <div className="flex items-center gap-2">
             <Database className="h-4 w-4 text-cyan-400" />
             <h3 className="text-sm font-semibold text-zinc-200">
@@ -223,41 +223,41 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 font-mono text-xs">
-          <div className="rounded-lg bg-zinc-950 p-3 border border-zinc-800">
-            <span className="text-zinc-400 text-[10px] block">MODELS</span>
-            <span className="text-lg font-bold text-zinc-100">{models.length}</span>
+          <div className="rounded-xl bg-zinc-950/80 p-3.5 border border-zinc-800">
+            <span className="text-zinc-500 text-[10px] block font-semibold">MODELS</span>
+            <span className="text-2xl font-extrabold text-zinc-100">{models.length}</span>
             <span className="text-[10px] text-zinc-400 block mt-0.5">ONNX records</span>
           </div>
 
-          <div className="rounded-lg bg-zinc-950 p-3 border border-zinc-800">
-            <span className="text-zinc-400 text-[10px] block">DATASETS</span>
-            <span className="text-lg font-bold text-zinc-100">{datasets.length}</span>
+          <div className="rounded-xl bg-zinc-950/80 p-3.5 border border-zinc-800">
+            <span className="text-zinc-500 text-[10px] block font-semibold">DATASETS</span>
+            <span className="text-2xl font-extrabold text-zinc-100">{datasets.length}</span>
             <span className="text-[10px] text-zinc-400 block mt-0.5">Test sets</span>
           </div>
 
-          <div className="rounded-lg bg-zinc-950 p-3 border border-zinc-800">
-            <span className="text-zinc-400 text-[10px] block">HARDWARE</span>
-            <span className="text-lg font-bold text-zinc-100">{hardware.length}</span>
-            <span className="text-[10px] text-emerald-400 block mt-0.5">
+          <div className="rounded-xl bg-zinc-950/80 p-3.5 border border-zinc-800">
+            <span className="text-zinc-500 text-[10px] block font-semibold">HARDWARE</span>
+            <span className="text-2xl font-extrabold text-zinc-100">{hardware.length}</span>
+            <span className="text-[10px] text-emerald-400 block mt-0.5 font-medium">
               {hardware.filter((h) => h.status === "ONLINE").length} Online Physical
             </span>
           </div>
 
-          <div className="rounded-lg bg-zinc-950 p-3 border border-zinc-800">
-            <span className="text-zinc-400 text-[10px] block">EXPERIMENTS</span>
-            <span className="text-lg font-bold text-zinc-100">{experiments.length}</span>
+          <div className="rounded-xl bg-zinc-950/80 p-3.5 border border-zinc-800">
+            <span className="text-zinc-500 text-[10px] block font-semibold">EXPERIMENTS</span>
+            <span className="text-2xl font-extrabold text-zinc-100">{experiments.length}</span>
             <span className="text-[10px] text-zinc-400 block mt-0.5">Total jobs</span>
           </div>
 
-          <div className="rounded-lg bg-zinc-950 p-3 border border-zinc-800">
-            <span className="text-zinc-400 text-[10px] block">BENCHMARK RUNS</span>
-            <span className="text-lg font-bold text-teal-400">{runs.length}</span>
+          <div className="rounded-xl bg-zinc-950/80 p-3.5 border border-zinc-800">
+            <span className="text-zinc-500 text-[10px] block font-semibold">BENCHMARK RUNS</span>
+            <span className="text-2xl font-extrabold text-teal-300">{runs.length}</span>
             <span className="text-[10px] text-zinc-400 block mt-0.5">Verified metrics</span>
           </div>
         </div>
 
         {/* System Paths */}
-        <div className="rounded-lg bg-zinc-950 p-3 border border-zinc-800 text-xs font-mono space-y-1.5 text-zinc-400">
+        <div className="rounded-xl bg-zinc-950/80 p-3.5 border border-zinc-800 text-xs font-mono space-y-1.5 text-zinc-400">
           <div className="flex justify-between">
             <span className="text-zinc-400">Storage Root:</span>
             <span className="text-zinc-200">/home/allan/project/metaHackathon/backend/storage</span>

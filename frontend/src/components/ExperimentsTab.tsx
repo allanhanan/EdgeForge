@@ -102,9 +102,9 @@ export const ExperimentsTab: React.FC<ExperimentsTabProps> = ({
   return (
     <div className="space-y-6">
       {/* Header & Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
         <div>
-          <h2 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
+          <h2 className="text-xl font-bold tracking-tight text-zinc-100 flex items-center gap-2 font-sans">
             <FlaskConical className="h-5 w-5 text-teal-400" />
             Experiment Registry & Reproducibility Trace
           </h2>
@@ -117,9 +117,9 @@ export const ExperimentsTab: React.FC<ExperimentsTabProps> = ({
           {setActiveTab && (
             <button
               onClick={() => setActiveTab("workbench")}
-              className="flex items-center gap-1.5 rounded-lg bg-teal-500 px-3 py-2 text-xs font-semibold text-zinc-950 hover:bg-teal-400 transition-all"
+              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-400 px-4 py-2 text-xs font-bold text-zinc-950 hover:brightness-110 shadow-md shadow-teal-500/20 transition-all"
             >
-              <Zap className="h-3.5 w-3.5" />
+              <Zap className="h-3.5 w-3.5 fill-zinc-950" />
               New Benchmark
             </button>
           )}
@@ -129,23 +129,23 @@ export const ExperimentsTab: React.FC<ExperimentsTabProps> = ({
       {/* Filter Bar */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-400" />
+          <Search className="absolute left-3.5 top-3 h-4 w-4 text-zinc-500" />
           <input
             type="text"
             placeholder="Search experiments by model, hardware, or tag..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg border border-zinc-800 bg-zinc-900/60 pl-9 pr-4 py-2 text-xs font-mono text-zinc-200 placeholder-zinc-500 focus:border-teal-500 focus:outline-none"
+            className="w-full rounded-xl border border-zinc-800 bg-zinc-900/60 pl-10 pr-4 py-2.5 text-xs font-mono text-zinc-200 placeholder-zinc-500 focus:border-teal-500 focus:outline-none shadow-inner"
           />
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2.5">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-xs font-mono text-zinc-300 focus:border-teal-500 focus:outline-none"
+            className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3.5 py-2 text-xs font-mono text-zinc-300 focus:border-teal-500 focus:outline-none"
           >
-            <option value="ALL">All Statuses</option>
+            <option value="ALL">All Statuses ({experiments.length})</option>
             <option value="COMPLETED">Completed</option>
             <option value="RUNNING">Running</option>
             <option value="FAILED">Failed</option>
@@ -155,9 +155,9 @@ export const ExperimentsTab: React.FC<ExperimentsTabProps> = ({
           <select
             value={hardwareFilter}
             onChange={(e) => setHardwareFilter(e.target.value)}
-            className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-xs font-mono text-zinc-300 focus:border-teal-500 focus:outline-none"
+            className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3.5 py-2 text-xs font-mono text-zinc-300 focus:border-teal-500 focus:outline-none"
           >
-            <option value="ALL">All Hardware</option>
+            <option value="ALL">All Hardware Fleet</option>
             {hardware.map((h) => (
               <option key={h.id} value={h.id}>
                 {h.name}
@@ -168,11 +168,11 @@ export const ExperimentsTab: React.FC<ExperimentsTabProps> = ({
       </div>
 
       {/* Table */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 overflow-hidden">
+      <div className="glass-panel rounded-2xl overflow-hidden shadow-xl">
         {filtered.length === 0 ? (
-          <div className="p-12 text-center text-zinc-400 space-y-3">
-            <FlaskConical className="h-8 w-8 text-zinc-600 mx-auto" />
-            <p className="text-sm font-medium text-zinc-300">No experiments match filter</p>
+          <div className="p-14 text-center text-zinc-400 space-y-3">
+            <FlaskConical className="h-10 w-10 text-zinc-600 mx-auto" />
+            <p className="text-sm font-semibold text-zinc-200">No experiments match filter</p>
             <p className="text-xs text-zinc-400 font-mono">
               Execute a benchmark in the Workbench tab to record new telemetry.
             </p>
@@ -181,9 +181,9 @@ export const ExperimentsTab: React.FC<ExperimentsTabProps> = ({
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs font-mono">
               <thead>
-                <tr className="border-b border-zinc-800 bg-zinc-950/60 text-zinc-400">
+                <tr className="border-b border-zinc-800/80 bg-zinc-950/80 text-zinc-400 font-medium">
                   <th className="py-3 px-4">Experiment / Model</th>
-                  <th className="py-3 px-4">Hardware</th>
+                  <th className="py-3 px-4">Hardware Target</th>
                   <th className="py-3 px-4">Precision</th>
                   <th className="py-3 px-4">Batch</th>
                   <th className="py-3 px-4">Median (P50)</th>
@@ -192,7 +192,7 @@ export const ExperimentsTab: React.FC<ExperimentsTabProps> = ({
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800/60">
+              <tbody className="divide-y divide-zinc-800/50">
                 {filtered.map((exp) => {
                   const run = exp.run || runMap.get(exp.id);
                   const model = modelMap.get(exp.model_id);
@@ -205,30 +205,30 @@ export const ExperimentsTab: React.FC<ExperimentsTabProps> = ({
                       className="hover:bg-zinc-800/30 cursor-pointer transition-colors"
                     >
                       <td className="py-3 px-4">
-                        <div className="font-semibold text-zinc-100 truncate max-w-[200px]">
+                        <div className="font-semibold text-zinc-100 truncate max-w-[200px] font-sans">
                           {exp.name}
                         </div>
-                        <div className="text-[10px] text-zinc-400">
+                        <div className="text-[10px] text-zinc-400 font-mono">
                           {model?.name || exp.model_id.slice(0, 12)}
                         </div>
                       </td>
 
                       <td className="py-3 px-4 text-zinc-300">
-                        <div className="truncate max-w-[150px]">{hw?.name || exp.hardware_id}</div>
-                        <div className="text-[10px] text-zinc-400">{exp.runtime}</div>
+                        <div className="truncate max-w-[150px] font-medium">{hw?.name || exp.hardware_id}</div>
+                        <div className="text-[10px] text-zinc-500">{exp.runtime}</div>
                       </td>
 
                       <td className="py-3 px-4">
-                        <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase text-zinc-300">
+                        <span className="rounded-md border border-zinc-700/60 bg-zinc-800/80 px-2 py-0.5 text-[10px] uppercase text-zinc-300 font-semibold">
                           {exp.precision}
                         </span>
                       </td>
 
-                      <td className="py-3 px-4 text-zinc-300">{exp.batch_size}</td>
+                      <td className="py-3 px-4 text-zinc-300 font-medium">{exp.batch_size}</td>
 
                       <td className="py-3 px-4">
                         {run ? (
-                          <span className="font-bold text-teal-400">
+                          <span className="font-bold text-teal-300">
                             {run.median_latency_ms.toFixed(2)} ms
                           </span>
                         ) : (
@@ -248,14 +248,14 @@ export const ExperimentsTab: React.FC<ExperimentsTabProps> = ({
 
                       <td className="py-3 px-4">
                         <span
-                          className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] uppercase font-bold ${
+                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] uppercase font-bold tracking-wider ${
                             exp.status === "COMPLETED"
-                              ? "bg-emerald-950/60 border border-emerald-500/30 text-emerald-400"
+                              ? "bg-emerald-950/70 border border-emerald-500/40 text-emerald-400"
                               : exp.status === "RUNNING"
-                              ? "bg-teal-950/60 border border-teal-500/30 text-teal-300 animate-pulse"
+                              ? "bg-teal-950/70 border border-teal-500/40 text-teal-300 animate-pulse"
                               : exp.status === "FAILED"
-                              ? "bg-red-950/60 border border-red-500/30 text-red-400"
-                              : "bg-zinc-800 text-zinc-400"
+                              ? "bg-rose-950/70 border border-rose-500/40 text-rose-400"
+                              : "bg-zinc-800/80 text-zinc-400 border border-zinc-700/60"
                           }`}
                         >
                           {exp.status === "COMPLETED" && <CheckCircle2 className="h-3 w-3" />}
@@ -265,13 +265,13 @@ export const ExperimentsTab: React.FC<ExperimentsTabProps> = ({
                       </td>
 
                       <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => setInspectExp(exp)}
-                            className="p-1 text-zinc-400 hover:text-zinc-100 rounded hover:bg-zinc-800"
+                            className="p-1.5 text-zinc-400 hover:text-zinc-100 rounded-lg hover:bg-zinc-800 transition-colors"
                             title="Inspect Details"
                           >
-                            <Eye className="h-3.5 w-3.5" />
+                            <Eye className="h-4 w-4" />
                           </button>
 
                           {run && onSelectForCompare && (
@@ -280,7 +280,7 @@ export const ExperimentsTab: React.FC<ExperimentsTabProps> = ({
                                 onSelectForCompare(run.id);
                                 setActiveTab?.("compare");
                               }}
-                              className="rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-[10px] text-teal-400 hover:bg-zinc-700"
+                              className="rounded-lg border border-teal-500/30 bg-teal-500/10 px-2.5 py-1 text-[11px] font-semibold text-teal-300 hover:bg-teal-500/20 transition-all"
                             >
                               Compare
                             </button>
@@ -298,20 +298,20 @@ export const ExperimentsTab: React.FC<ExperimentsTabProps> = ({
 
       {/* Experiment Inspection Modal */}
       {inspectExp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="w-full max-w-3xl rounded-xl border border-zinc-800 bg-zinc-900 p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto">
+          <div className="w-full max-w-3xl rounded-2xl border border-zinc-800 bg-zinc-900/95 p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-start justify-between border-b border-zinc-800 pb-3">
               <div>
-                <span className="text-[10px] font-mono text-teal-400 uppercase">
+                <span className="text-[10px] font-mono text-teal-400 uppercase font-semibold">
                   Experiment Inspection • ID: {inspectExp.id}
                 </span>
-                <h3 className="text-base font-semibold text-zinc-100">{inspectExp.name}</h3>
+                <h3 className="text-base font-bold text-zinc-100 font-sans">{inspectExp.name}</h3>
               </div>
               <button
                 onClick={() => setInspectExp(null)}
-                className="text-zinc-400 hover:text-zinc-200 text-lg"
+                className="text-zinc-400 hover:text-zinc-200 p-1"
               >
-                &times;
+                <X className="h-4 w-4" />
               </button>
             </div>
 
@@ -324,50 +324,50 @@ export const ExperimentsTab: React.FC<ExperimentsTabProps> = ({
                     Percentile Latency & Variance Distribution
                   </h4>
                   <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2 text-xs font-mono">
-                    <div className="rounded bg-zinc-950 p-2 border border-zinc-800">
-                      <span className="text-[10px] text-zinc-400 block">MIN</span>
+                    <div className="rounded-xl bg-zinc-950/80 p-2.5 border border-zinc-800">
+                      <span className="text-[10px] text-zinc-500 block font-semibold">MIN</span>
                       <span className="text-zinc-200 font-bold">
-                        {Math.min(...(activeRun.latency_samples_ms || [activeRun.median_latency_ms])).toFixed(2)} ms
+                        {Math.min(...(activeRun.latency_samples_ms?.length ? activeRun.latency_samples_ms : [activeRun.median_latency_ms])).toFixed(2)} ms
                       </span>
                     </div>
 
-                    <div className="rounded bg-zinc-950 p-2 border border-teal-500/40">
+                    <div className="rounded-xl bg-zinc-950/80 p-2.5 border border-teal-500/40">
                       <span className="text-[10px] text-teal-400 block font-semibold">P50 (MEDIAN)</span>
                       <span className="text-teal-300 font-bold">
                         {activeRun.median_latency_ms.toFixed(2)} ms
                       </span>
                     </div>
 
-                    <div className="rounded bg-zinc-950 p-2 border border-zinc-800">
-                      <span className="text-[10px] text-zinc-400 block">MEAN</span>
+                    <div className="rounded-xl bg-zinc-950/80 p-2.5 border border-zinc-800">
+                      <span className="text-[10px] text-zinc-500 block font-semibold">MEAN</span>
                       <span className="text-zinc-200 font-bold">
                         {activeRun.mean_latency_ms.toFixed(2)} ms
                       </span>
                     </div>
 
-                    <div className="rounded bg-zinc-950 p-2 border border-zinc-800">
-                      <span className="text-[10px] text-zinc-400 block">P90</span>
+                    <div className="rounded-xl bg-zinc-950/80 p-2.5 border border-zinc-800">
+                      <span className="text-[10px] text-zinc-500 block font-semibold">P90</span>
                       <span className="text-zinc-200 font-bold">
                         {activeRun.p90_latency_ms.toFixed(2)} ms
                       </span>
                     </div>
 
-                    <div className="rounded bg-zinc-950 p-2 border border-cyan-500/40">
-                      <span className="text-[10px] text-cyan-400 block">P95</span>
+                    <div className="rounded-xl bg-zinc-950/80 p-2.5 border border-cyan-500/40">
+                      <span className="text-[10px] text-cyan-400 block font-semibold">P95</span>
                       <span className="text-cyan-300 font-bold">
                         {activeRun.p95_latency_ms.toFixed(2)} ms
                       </span>
                     </div>
 
-                    <div className="rounded bg-zinc-950 p-2 border border-zinc-800">
-                      <span className="text-[10px] text-zinc-400 block">P99</span>
+                    <div className="rounded-xl bg-zinc-950/80 p-2.5 border border-zinc-800">
+                      <span className="text-[10px] text-zinc-500 block font-semibold">P99</span>
                       <span className="text-zinc-200 font-bold">
                         {activeRun.p99_latency_ms.toFixed(2)} ms
                       </span>
                     </div>
 
-                    <div className="rounded bg-zinc-950 p-2 border border-zinc-800">
-                      <span className="text-[10px] text-zinc-400 block">STD DEV</span>
+                    <div className="rounded-xl bg-zinc-950/80 p-2.5 border border-zinc-800">
+                      <span className="text-[10px] text-zinc-500 block font-semibold">STD DEV</span>
                       <span className="text-zinc-200 font-bold">
                         ±{activeRun.std_latency_ms.toFixed(2)} ms
                       </span>
@@ -381,7 +381,7 @@ export const ExperimentsTab: React.FC<ExperimentsTabProps> = ({
                     <span className="text-xs font-mono text-zinc-400">
                       Raw Inference Sample Profile ({chartData.length} iterations)
                     </span>
-                    <div className="h-44 w-full rounded-lg border border-zinc-800 bg-zinc-950 p-2">
+                    <div className="h-48 w-full rounded-xl border border-zinc-800 bg-zinc-950/80 p-3 shadow-inner">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
@@ -391,12 +391,12 @@ export const ExperimentsTab: React.FC<ExperimentsTabProps> = ({
                             contentStyle={{
                               backgroundColor: "#18181b",
                               border: "1px solid #3f3f46",
-                              borderRadius: "6px",
+                              borderRadius: "8px",
                               fontSize: "11px",
                               fontFamily: "monospace",
                             }}
                           />
-                          <Bar dataKey="latency" fill="#14b8a6" radius={[2, 2, 0, 0]} />
+                          <Bar dataKey="latency" fill="#14b8a6" radius={[3, 3, 0, 0]} isAnimationActive={false} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -409,7 +409,7 @@ export const ExperimentsTab: React.FC<ExperimentsTabProps> = ({
                     <ShieldCheck className="h-4 w-4 text-emerald-400" />
                     Zero-Defect Reproducibility Metadata
                   </h4>
-                  <div className="rounded-lg bg-zinc-950 p-3 border border-zinc-800 text-xs font-mono space-y-1.5 text-zinc-300">
+                  <div className="rounded-xl bg-zinc-950/80 p-3.5 border border-zinc-800 text-xs font-mono space-y-2 text-zinc-300">
                     <div className="flex justify-between">
                       <span className="text-zinc-400">Timestamp:</span>
                       <span>{new Date(activeRun.created_at).toLocaleString()}</span>
@@ -427,7 +427,7 @@ export const ExperimentsTab: React.FC<ExperimentsTabProps> = ({
                       <span>{activeRun.memory_rss_mb.toFixed(1)} MB</span>
                     </div>
                     {activeRun.reproducibility_metadata && (
-                      <div className="pt-2 border-t border-zinc-800 space-y-1">
+                      <div className="pt-2 border-t border-zinc-800/80 space-y-1">
                         {Object.entries(activeRun.reproducibility_metadata).map(([k, v]) => (
                           <div key={k} className="flex justify-between text-[11px]">
                             <span className="text-zinc-400">{k}:</span>
@@ -453,16 +453,16 @@ export const ExperimentsTab: React.FC<ExperimentsTabProps> = ({
             {inspectExp.logs && (
               <div>
                 <span className="text-xs font-mono text-zinc-400 block mb-1">Execution Log Stream:</span>
-                <pre className="max-h-36 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-[11px] font-mono text-zinc-300 whitespace-pre-wrap">
+                <pre className="max-h-36 overflow-y-auto rounded-xl border border-zinc-800 bg-zinc-950 p-3 text-[11px] font-mono text-zinc-300 whitespace-pre-wrap">
                   {inspectExp.logs}
                 </pre>
               </div>
             )}
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+            <div className="flex justify-end gap-2.5 pt-3 border-t border-zinc-800">
               <button
                 onClick={() => setInspectExp(null)}
-                className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-700"
+                className="rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-700 transition-all"
               >
                 Close
               </button>
@@ -472,7 +472,7 @@ export const ExperimentsTab: React.FC<ExperimentsTabProps> = ({
                     setInspectExp(null);
                     setActiveTab("deployments");
                   }}
-                  className="rounded-lg bg-teal-500 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-teal-400"
+                  className="rounded-xl bg-gradient-to-r from-teal-500 to-emerald-400 px-4 py-2 text-xs font-bold text-zinc-950 hover:brightness-110 shadow-md shadow-teal-500/20 transition-all"
                 >
                   Export Deployment Package
                 </button>
