@@ -19,8 +19,11 @@ from backend.app.api.benchmarks import router as benchmarks_router
 from backend.app.api.optimizations import router as optimizations_router
 from backend.app.api.recommendations import router as recommendations_router
 from backend.app.api.agent import router as agent_router
-from backend.app.api.deployments import router as deployments_router
+from backend.app.api.deployments import router as deployments_router, packages_router
 from backend.app.api.reports import router as reports_router
+from backend.app.api.compatibility import router as compatibility_router
+from backend.app.api.runtimes import router as runtimes_router
+from backend.app.api.system import router as system_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -116,7 +119,11 @@ app.include_router(optimizations_router, prefix=api_v1)
 app.include_router(recommendations_router, prefix=api_v1)
 app.include_router(agent_router, prefix=api_v1)
 app.include_router(deployments_router, prefix=api_v1)
+app.include_router(packages_router, prefix=api_v1)
 app.include_router(reports_router, prefix=api_v1)
+app.include_router(compatibility_router, prefix=api_v1)
+app.include_router(runtimes_router, prefix=api_v1)
+app.include_router(system_router, prefix=api_v1)
 
 @app.get("/health")
 @app.get(f"{api_v1}/health")

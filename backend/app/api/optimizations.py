@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.core.config import settings
 from backend.app.core.database import get_db
-from backend.app.models.entities import ModelRecord
+from backend.app.models.entities import ModelRecord, DatasetRecord
 from backend.app.services.optimizer import optimize_onnx_model
 from backend.app.services.onnx_inspector import inspect_onnx_file
 
@@ -16,6 +16,7 @@ router = APIRouter(prefix="/optimizations", tags=["Optimizations"])
 class QuantizeRequest(BaseModel):
     model_id: str
     optimization_type: str = "int8_dynamic"  # "int8_dynamic", "int8_static", "fp16", "graph_opt"
+    dataset_id: Optional[str] = None
     register_as_new_model: bool = True
 
 @router.post("/quantize", response_model=Dict[str, Any])
@@ -26,13 +27,21 @@ async def quantize_model(payload: QuantizeRequest, db: AsyncSession = Depends(ge
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
 
+    dataset_path = None
+    if payload.dataset_id:
+        stmt_d = select(DatasetRecord).where(DatasetRecord.id == payload.dataset_id)
+        res_d = await db.execute(stmt_d)
+        dataset = res_d.scalar_one_or_none()
+        if dataset:
+            dataset_path = Path(dataset.filepath)
+
     input_path = Path(model.filepath)
     suffix = f"_{payload.optimization_type}.onnx"
     out_filename = f"{Path(model.filename).stem}{suffix}"
     output_path = settings.MODELS_DIR / out_filename
 
     try:
-        report = optimize_onnx_model(input_path, output_path, payload.optimization_type)
+        report = optimize_onnx_model(input_path, output_path, payload.optimization_type, dataset_path=dataset_path)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Quantization failed: {str(e)}")
 

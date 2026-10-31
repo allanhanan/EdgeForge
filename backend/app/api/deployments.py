@@ -17,12 +17,14 @@ from backend.app.models.entities import ModelRecord, BenchmarkRun, HardwareDevic
 from backend.app.services.exporter import export_deployment_bundle
 
 router = APIRouter(prefix="/deployments", tags=["Deployments"])
+packages_router = APIRouter(prefix="/packages", tags=["Packages"])
 
 class ExportRequest(BaseModel):
     model_id: str
     run_id: str
 
 @router.post("/export", response_model=Dict[str, Any])
+@packages_router.post("/export", response_model=Dict[str, Any])
 async def export_package(payload: ExportRequest, db: AsyncSession = Depends(get_db)):
     stmt_m = select(ModelRecord).where(ModelRecord.id == payload.model_id)
     res_m = await db.execute(stmt_m)
@@ -50,6 +52,7 @@ async def export_package(payload: ExportRequest, db: AsyncSession = Depends(get_
     return bundle_info
 
 @router.get("/download/{bundle_id}")
+@packages_router.get("/download/{bundle_id}")
 async def download_bundle(bundle_id: str):
     zip_path = settings.EXPORTS_DIR / f"{bundle_id}.zip"
     if not zip_path.exists():
@@ -61,6 +64,7 @@ async def download_bundle(bundle_id: str):
     )
 
 @router.post("/verify/{bundle_id}")
+@packages_router.post("/verify/{bundle_id}")
 async def verify_bundle_locally(bundle_id: str):
     """
     Extracts the exported bundle into a sandbox and runs 'python infer.py'

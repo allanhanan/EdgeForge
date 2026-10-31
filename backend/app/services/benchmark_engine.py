@@ -11,12 +11,16 @@ import onnxruntime as ort
 from backend.app.services.accuracy_evaluator import (
     evaluate_detection_map,
     parse_yolo_annotations,
+    parse_coco_annotations,
     preprocess_image_for_yolo,
     postprocess_yolo_output
 )
 
+import warnings
 try:
-    import pynvml
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=FutureWarning)
+        import pynvml
     HAS_PYNVML = True
 except ImportError:
     HAS_PYNVML = False
@@ -121,6 +125,7 @@ class BenchmarkEngine:
 
         # Repeated benchmark iterations with high-resolution timer
         latency_samples_ms: List[float] = []
+        e2e_samples_ms: List[float] = []
         power_readings: List[float] = []
         temp_readings: List[float] = []
 
@@ -128,11 +133,10 @@ class BenchmarkEngine:
         mem_rss_start = process.memory_info().rss / (1024 * 1024)
 
         for i in range(iterations):
-            if i % 10 == 0:
-                telem = cls.read_gpu_telemetry()
-                if telem:
-                    power_readings.append(telem["power_watts"])
-                    temp_readings.append(telem["temp_c"])
+            t_e2e_0 = time.perf_counter_ns()
+
+            if active_provider == "CUDAExecutionProvider" and HAS_TORCH and torch.cuda.is_available():
+                torch.cuda.synchronize()
 
             t0 = time.perf_counter_ns()
             session.run(None, feed_dict)
@@ -140,15 +144,27 @@ class BenchmarkEngine:
                 torch.cuda.synchronize()
             t1 = time.perf_counter_ns()
 
+            t_e2e_1 = time.perf_counter_ns()
+
             dt_ms = (t1 - t0) / 1_000_000.0
+            dt_e2e_ms = (t_e2e_1 - t_e2e_0) / 1_000_000.0
             latency_samples_ms.append(dt_ms)
+            e2e_samples_ms.append(dt_e2e_ms)
+
+            # Sample GPU telemetry outside the critical timing section
+            if i % 10 == 0:
+                telem = cls.read_gpu_telemetry()
+                if telem:
+                    power_readings.append(telem["power_watts"])
+                    temp_readings.append(telem["temp_c"])
 
             if progress_callback and (i + 1) % max(1, iterations // 5) == 0:
                 pct = 10.0 + 70.0 * ((i + 1) / iterations)
                 progress_callback(pct, f"Completed iteration {i+1}/{iterations} ({dt_ms:.2f} ms)")
 
         mem_rss_end = process.memory_info().rss / (1024 * 1024)
-        memory_rss_mb = round(max(0.0, mem_rss_end - mem_rss_start) + 45.0, 2)  # Base runtime footprint
+        memory_rss_mb = round(mem_rss_end, 2)
+        memory_rss_delta_mb = round(max(0.0, mem_rss_end - mem_rss_start), 2)
 
         # Compute statistics
         samples_np = np.array(latency_samples_ms)
@@ -159,6 +175,10 @@ class BenchmarkEngine:
         p99_ms = float(np.percentile(samples_np, 99))
         std_ms = float(np.std(samples_np))
         fps = round((1000.0 / median_ms) * batch_size, 2) if median_ms > 0 else 0.0
+
+        e2e_np = np.array(e2e_samples_ms)
+        median_e2e_ms = float(np.median(e2e_np))
+        mean_e2e_ms = float(np.mean(e2e_np))
 
         # GPU metrics
         avg_power = round(float(np.mean(power_readings)), 1) if power_readings else None
@@ -197,6 +217,9 @@ class BenchmarkEngine:
             "batch_size": batch_size,
             "iterations": iterations,
             "warmup_iterations": warmup_iterations,
+            "measurement_methodology": "Monotonic high-resolution timing (time.perf_counter_ns) with stream synchronization barriers",
+            "inference_latency_median_ms": round(median_ms, 3),
+            "e2e_latency_median_ms": round(median_e2e_ms, 3),
             "timestamp": time.time(),
         }
 
@@ -208,8 +231,10 @@ class BenchmarkEngine:
             "p95_latency_ms": round(p95_ms, 3),
             "p99_latency_ms": round(p99_ms, 3),
             "std_latency_ms": round(std_ms, 3),
+            "e2e_latency_ms": round(median_e2e_ms, 3),
             "fps": fps,
             "memory_rss_mb": memory_rss_mb,
+            "memory_rss_delta_mb": memory_rss_delta_mb,
             "gpu_memory_used_mb": gpu_mem_used_mb,
             "avg_power_watts": avg_power,
             "peak_power_watts": peak_power,
@@ -241,6 +266,21 @@ class BenchmarkEngine:
         if not image_files:
             return {"map50": 0.0, "map50_95": 0.0}
 
+        # Check for COCO format annotations
+        coco_map = {}
+        coco_candidates = [
+            dataset_path / "annotations.json",
+            dataset_path / "instances_val.json",
+            dataset_path / "annotations" / "instances_val.json",
+            dataset_path / "annotations" / "annotations.json",
+            (labels_dir / "annotations.json") if labels_dir else None
+        ]
+        for c_file in coco_candidates:
+            if c_file and c_file.exists():
+                coco_map, _ = parse_coco_annotations(c_file)
+                if coco_map:
+                    break
+
         # Limit to 50 sample images for fast interactive validation
         image_files = sorted(image_files)[:50]
 
@@ -254,12 +294,13 @@ class BenchmarkEngine:
             img = Image.open(img_path)
             w, h = img.size
 
-            # Load YOLO label if available
-            label_file = (labels_dir / f"{img_path.stem}.txt") if labels_dir.exists() else None
-            if label_file and label_file.exists():
-                gt_boxes = parse_yolo_annotations(label_file, w, h)
-            else:
-                gt_boxes = []
+            gt_boxes = []
+            if coco_map and (img_path.name in coco_map or img_path.stem in coco_map):
+                gt_boxes = coco_map.get(img_path.name, coco_map.get(img_path.stem, []))
+            elif labels_dir and labels_dir.exists():
+                label_file = labels_dir / f"{img_path.stem}.txt"
+                if label_file.exists():
+                    gt_boxes = parse_yolo_annotations(label_file, w, h)
 
             ground_truth_all.append(gt_boxes)
 

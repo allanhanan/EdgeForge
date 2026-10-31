@@ -156,6 +156,61 @@ def parse_yolo_annotations(
                 })
     return boxes
 
+def parse_coco_annotations(
+    coco_json_path: Path
+) -> Tuple[Dict[str, List[Dict[str, Any]]], List[str]]:
+    """
+    Parse COCO format JSON annotations file.
+    Returns:
+        (image_name_to_boxes, class_names_list)
+        where each box is {'class_id': int, 'box': [x1, y1, x2, y2]}
+    """
+    if not coco_json_path.exists():
+        return {}, []
+
+    try:
+        with open(coco_json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return {}, []
+
+    categories = data.get("categories", [])
+    cat_id_to_idx = {}
+    class_names = []
+    for idx, cat in enumerate(sorted(categories, key=lambda c: c.get("id", 0))):
+        cat_id_to_idx[cat["id"]] = idx
+        class_names.append(cat.get("name", f"class_{idx}"))
+
+    img_id_to_name = {}
+    for img in data.get("images", []):
+        img_id_to_name[img["id"]] = Path(img.get("file_name", "")).name
+
+    annotations_by_filename: Dict[str, List[Dict[str, Any]]] = {}
+    for ann in data.get("annotations", []):
+        img_id = ann.get("image_id")
+        filename = img_id_to_name.get(img_id)
+        if not filename:
+            continue
+        
+        bbox = ann.get("bbox", [])
+        if len(bbox) >= 4:
+            x, y, w, h = bbox[:4]
+            x1 = float(x)
+            y1 = float(y)
+            x2 = float(x + w)
+            y2 = float(y + h)
+            cat_id = ann.get("category_id", 0)
+            class_id = cat_id_to_idx.get(cat_id, 0)
+
+            if filename not in annotations_by_filename:
+                annotations_by_filename[filename] = []
+            annotations_by_filename[filename].append({
+                "class_id": class_id,
+                "box": [x1, y1, x2, y2]
+            })
+
+    return annotations_by_filename, class_names
+
 def preprocess_image_for_yolo(
     image_path: Path, input_shape: Tuple[int, int] = (640, 640)
 ) -> Tuple[np.ndarray, float, Tuple[int, int]]:

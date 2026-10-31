@@ -14,8 +14,19 @@ import {
   ChevronRight,
   X,
   Cpu,
+  AlertTriangle,
+  ShieldCheck,
+  ShieldAlert,
 } from "lucide-react";
-import { ModelRecord, uploadModel, seedSampleModel, deleteModel, quantizeModel } from "@/lib/api";
+import {
+  ModelRecord,
+  uploadModel,
+  seedSampleModel,
+  deleteModel,
+  quantizeModel,
+  fetchCompatibilityMatrix,
+  CompatibilityReport
+} from "@/lib/api";
 
 interface ModelsTabProps {
   models: ModelRecord[];
@@ -35,6 +46,24 @@ export const ModelsTab: React.FC<ModelsTabProps> = ({
   const [quantModalOpen, setQuantModalOpen] = useState(false);
   const [activeModelForQuant, setActiveModelForQuant] = useState<ModelRecord | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const [compatModalOpen, setCompatModalOpen] = useState(false);
+  const [compatData, setCompatData] = useState<any>(null);
+  const [isCheckingCompat, setIsCheckingCompat] = useState(false);
+
+  const handleCheckCompatibility = async (modelId: string) => {
+    setIsCheckingCompat(true);
+    setErrorMsg(null);
+    try {
+      const data = await fetchCompatibilityMatrix(modelId);
+      setCompatData(data);
+      setCompatModalOpen(true);
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to evaluate compatibility");
+    } finally {
+      setIsCheckingCompat(false);
+    }
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -301,7 +330,15 @@ export const ModelsTab: React.FC<ModelsTabProps> = ({
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-zinc-800 flex gap-2">
+              <div className="pt-2 border-t border-zinc-800 flex flex-col gap-2">
+                <button
+                  onClick={() => handleCheckCompatibility(selectedModel.id)}
+                  disabled={isCheckingCompat}
+                  className="w-full rounded-lg bg-zinc-800 hover:bg-zinc-700 py-2 text-center font-semibold text-zinc-100 transition-all text-xs flex items-center justify-center gap-1.5 border border-zinc-700 disabled:opacity-50"
+                >
+                  <Cpu className="h-3.5 w-3.5 text-teal-400" />
+                  {isCheckingCompat ? "Evaluating Matrix..." : "Check Hardware Compatibility Matrix"}
+                </button>
                 <button
                   onClick={() => onSelectForBenchmark(selectedModel.id)}
                   className="w-full rounded-lg bg-teal-500 py-2 text-center font-semibold text-zinc-950 hover:bg-teal-400 transition-all text-xs"
@@ -367,6 +404,104 @@ export const ModelsTab: React.FC<ModelsTabProps> = ({
                 className="rounded-lg bg-teal-500 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-teal-400 disabled:opacity-50"
               >
                 {isQuantizing ? "Optimizing..." : "Apply Quantization"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Compatibility Matrix Modal */}
+      {compatModalOpen && compatData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="w-full max-w-3xl max-h-[85vh] flex flex-col rounded-xl border border-zinc-800 bg-zinc-900 shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between border-b border-zinc-800 p-5 bg-zinc-950/60">
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
+                  <Cpu className="h-4 w-4 text-teal-400" />
+                  Edge Hardware Compatibility Matrix
+                </h3>
+                <p className="text-xs text-zinc-400 font-mono mt-0.5">
+                  Model: {compatData.model_name}
+                </p>
+              </div>
+              <button
+                onClick={() => setCompatModalOpen(false)}
+                className="text-zinc-400 hover:text-zinc-200 p-1"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4">
+              {compatData.device_evaluations?.map((devEval: any) => {
+                const statusColor =
+                  devEval.overall_status === "COMPATIBLE"
+                    ? "border-teal-500/40 bg-teal-500/10 text-teal-300"
+                    : devEval.overall_status === "CONDITIONAL"
+                    ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                    : "border-rose-500/40 bg-rose-500/10 text-rose-300";
+
+                return (
+                  <div
+                    key={devEval.hardware_id}
+                    className="rounded-lg border border-zinc-800 bg-zinc-950 p-4 space-y-3 font-mono"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-zinc-200 text-xs">
+                          {devEval.hardware_name}
+                        </span>
+                        <span className="text-[10px] text-zinc-500">
+                          ({devEval.runtime} • {devEval.precision?.toUpperCase()})
+                        </span>
+                      </div>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded border ${statusColor}`}
+                      >
+                        {devEval.overall_status}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5 pt-1">
+                      {devEval.findings?.map((f: any, idx: number) => {
+                        const sevBadge =
+                          f.severity === "ERROR"
+                            ? "text-rose-400 bg-rose-950/50 border-rose-800"
+                            : f.severity === "WARNING"
+                            ? "text-amber-400 bg-amber-950/50 border-amber-800"
+                            : "text-zinc-400 bg-zinc-900 border-zinc-800";
+
+                        return (
+                          <div
+                            key={idx}
+                            className="text-[11px] p-2 rounded bg-zinc-900/60 border border-zinc-800/80 space-y-1"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${sevBadge}`}
+                              >
+                                {f.severity}
+                              </span>
+                              <span className="text-zinc-300 font-medium">{f.message}</span>
+                            </div>
+                            <p className="text-[10px] text-teal-400/90 pl-1">
+                              Action: {f.remediation}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="border-t border-zinc-800 p-4 bg-zinc-950/60 flex justify-end">
+              <button
+                onClick={() => setCompatModalOpen(false)}
+                className="rounded-lg bg-zinc-800 hover:bg-zinc-700 px-4 py-2 text-xs font-semibold text-zinc-200 transition-all"
+              >
+                Close Matrix
               </button>
             </div>
           </div>

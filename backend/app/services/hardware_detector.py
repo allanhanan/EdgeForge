@@ -5,8 +5,11 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 import psutil
 
+import warnings
 try:
-    import pynvml
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=FutureWarning)
+        import pynvml
     HAS_PYNVML = True
 except ImportError:
     HAS_PYNVML = False

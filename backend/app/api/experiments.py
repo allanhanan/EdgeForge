@@ -73,3 +73,38 @@ async def get_experiment(experiment_id: str, db: AsyncSession = Depends(get_db))
     if not exp:
         raise HTTPException(status_code=404, detail="Experiment not found")
     return exp
+
+@router.post("/{experiment_id}/cancel", response_model=ExperimentResponse)
+async def cancel_experiment(experiment_id: str, db: AsyncSession = Depends(get_db)):
+    stmt = select(Experiment).options(selectinload(Experiment.run)).where(Experiment.id == experiment_id)
+    res = await db.execute(stmt)
+    exp = res.scalar_one_or_none()
+    if not exp:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+
+    if exp.status in ("COMPLETED", "FAILED", "CANCELLED"):
+        return exp
+
+    exp.status = "CANCELLED"
+    exp.error_message = "Experiment execution cancelled by operator."
+    exp.completed_at = datetime.utcnow()
+    exp.logs = (exp.logs or "") + f"[{datetime.utcnow().strftime('%H:%M:%S')}] Job cancelled.\n"
+    await db.commit()
+    return exp
+
+@router.post("/{experiment_id}/retry", response_model=ExperimentResponse)
+async def retry_experiment(experiment_id: str, db: AsyncSession = Depends(get_db)):
+    stmt = select(Experiment).options(selectinload(Experiment.run)).where(Experiment.id == experiment_id)
+    res = await db.execute(stmt)
+    exp = res.scalar_one_or_none()
+    if not exp:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+
+    exp.status = "QUEUED"
+    exp.error_message = None
+    exp.progress = 0.0
+    exp.started_at = None
+    exp.completed_at = None
+    exp.logs = f"[{datetime.utcnow().strftime('%H:%M:%S')}] Job reset to QUEUED for retry.\n"
+    await db.commit()
+    return exp

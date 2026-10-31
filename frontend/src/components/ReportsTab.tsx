@@ -23,6 +23,7 @@ interface ReportData {
   model_name: string;
   runs_count: number;
   markdown_report: string;
+  html_report?: string;
   runs: Array<{
     id: string;
     hardware_name: string;
@@ -97,6 +98,33 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({ models }) => {
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadHtml = () => {
+    if (!reportData) return;
+    const content = reportData.html_report || reportData.markdown_report;
+    const blob = new Blob([content], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `edgeforge-report-${reportData.model_name.toLowerCase().replace(/\s+/g, "-")}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadJson = () => {
+    if (!reportData) return;
+    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `edgeforge-report-${reportData.model_name.toLowerCase().replace(/\s+/g, "-")}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -107,7 +135,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({ models }) => {
             Executive Performance & Compliance Reports
           </h2>
           <p className="text-xs text-zinc-400 font-mono mt-0.5">
-            Auto-generate comprehensive markdown benchmark summaries with SLA metrics and reproducibility tables.
+            Auto-generate comprehensive markdown, HTML, and JSON benchmark summaries with SLA metrics and reproducibility tables.
           </p>
         </div>
 
@@ -133,17 +161,37 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({ models }) => {
               <button
                 onClick={handleCopyMarkdown}
                 className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs font-mono text-zinc-200 hover:bg-zinc-700 transition-all"
+                title="Copy Markdown to Clipboard"
               >
                 {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                {copied ? "Copied" : "Copy Markdown"}
+                {copied ? "Copied" : "Copy"}
+              </button>
+
+              <button
+                onClick={handleDownloadHtml}
+                className="flex items-center gap-1.5 rounded-lg border border-teal-500/40 bg-teal-500/10 px-3 py-1.5 text-xs font-mono text-teal-300 hover:bg-teal-500/20 transition-all"
+                title="Download HTML Report"
+              >
+                <Download className="h-3.5 w-3.5" />
+                HTML
+              </button>
+
+              <button
+                onClick={handleDownloadJson}
+                className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs font-mono text-zinc-200 hover:bg-zinc-700 transition-all"
+                title="Download JSON Report"
+              >
+                <Download className="h-3.5 w-3.5" />
+                JSON
               </button>
 
               <button
                 onClick={handleDownloadMarkdown}
                 className="flex items-center gap-1.5 rounded-lg bg-teal-500 px-3 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-teal-400 transition-all"
+                title="Download Markdown Report"
               >
                 <Download className="h-3.5 w-3.5" />
-                Download Report (.md)
+                Markdown (.md)
               </button>
             </div>
           )}

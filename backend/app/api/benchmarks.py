@@ -6,6 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import onnxruntime as ort
+
 from backend.app.core.config import settings
 from backend.app.core.database import get_db, AsyncSessionLocal
 from backend.app.models.entities import Experiment, BenchmarkRun, ModelRecord, DatasetRecord, HardwareDevice
@@ -31,6 +33,31 @@ async def execute_benchmark_task(experiment_id: str):
         exp.started_at = datetime.utcnow()
         exp.logs = f"[{datetime.utcnow().strftime('%H:%M:%S')}] Benchmark job initialized.\n"
         await db.commit()
+
+        # Strict Hardware Provenance & Verification Guard
+        if not exp.hardware or not exp.hardware.is_local:
+            exp.status = "FAILED"
+            dev_name = exp.hardware.name if exp.hardware else exp.hardware_id
+            dev_status = exp.hardware.status if exp.hardware else "UNKNOWN"
+            exp.error_message = (
+                f"Cannot execute physical benchmark: Target hardware '{dev_name}' "
+                f"is not locally connected (Status: {dev_status}). "
+                f"Physical edge benchmarks require an authenticated on-device EdgeForge worker."
+            )
+            exp.logs += f"[{datetime.utcnow().strftime('%H:%M:%S')}] ERROR: {exp.error_message}\n"
+            await db.commit()
+            return
+
+        available_providers = ort.get_available_providers()
+        if exp.execution_provider not in available_providers:
+            exp.status = "FAILED"
+            exp.error_message = (
+                f"Requested execution provider '{exp.execution_provider}' is not available on this host. "
+                f"Available providers: {available_providers}."
+            )
+            exp.logs += f"[{datetime.utcnow().strftime('%H:%M:%S')}] ERROR: {exp.error_message}\n"
+            await db.commit()
+            return
 
         try:
             model = exp.model
@@ -90,6 +117,7 @@ async def execute_benchmark_task(experiment_id: str):
                 map50=metrics.get("map50"),
                 map50_95=metrics.get("map50_95"),
                 model_size_mb=metrics["model_size_mb"],
+                verified=True,
                 reproducibility_metadata=metrics["reproducibility_metadata"]
             )
             db.add(run)

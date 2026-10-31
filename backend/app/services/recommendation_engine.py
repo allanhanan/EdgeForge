@@ -12,11 +12,12 @@ class RecommendationEngine:
         latency_ms = float(run.get("median_latency_ms", 9999.0))
         fps = float(run.get("fps", 0.0))
         memory_mb = float(run.get("memory_rss_mb", 0.0))
-        power_w = run.get("avg_power_watts") or device.get("tdp_watts")
+        measured_power_w = run.get("avg_power_watts")
+        device_tdp_w = device.get("tdp_watts")
         cost_usd = device.get("cost_usd")
         map50 = run.get("map50")
         
-        # Calculate accuracy loss relative to baseline if available
+        # Calculate accuracy loss relative to baseline if available on matching dataset
         accuracy_loss_pct = None
         if baseline_map50 and baseline_map50 > 0 and map50 is not None:
             accuracy_loss_pct = max(0.0, ((baseline_map50 - map50) / baseline_map50) * 100.0)
@@ -38,10 +39,13 @@ class RecommendationEngine:
                 violations.append(f"Memory footprint {memory_mb:.1f}MB exceeds limit {constraints.max_memory_mb:.1f}MB")
 
         if constraints.max_power_w is not None:
-            if power_w is None:
+            if measured_power_w is None:
+                violations.append(f"Power consumption not measured on hardware; cannot confirm <= {constraints.max_power_w:.1f}W hard constraint")
                 unknowns.append("Power telemetry not measured on device")
-            elif power_w > constraints.max_power_w:
-                violations.append(f"Power consumption {power_w:.1f}W exceeds TDP limit {constraints.max_power_w:.1f}W")
+            elif measured_power_w > constraints.max_power_w:
+                violations.append(f"Measured power consumption {measured_power_w:.1f}W exceeds limit {constraints.max_power_w:.1f}W")
+        elif measured_power_w is None:
+            unknowns.append("Power telemetry not measured on device")
 
         if constraints.max_cost_usd is not None:
             if cost_usd is not None and cost_usd > constraints.max_cost_usd:
@@ -49,9 +53,12 @@ class RecommendationEngine:
 
         if constraints.max_accuracy_loss_pct is not None:
             if accuracy_loss_pct is None:
+                violations.append(f"Accuracy regression unverified on dataset; cannot satisfy hard limit <= {constraints.max_accuracy_loss_pct:.1f}%")
                 unknowns.append("Accuracy regression not verified against validation dataset")
             elif accuracy_loss_pct > constraints.max_accuracy_loss_pct:
                 violations.append(f"Accuracy loss {accuracy_loss_pct:.1f}% exceeds threshold {constraints.max_accuracy_loss_pct:.1f}%")
+        elif accuracy_loss_pct is None and map50 is None:
+            unknowns.append("Accuracy not evaluated on validation dataset")
 
         if constraints.required_device_type is not None:
             if device.get("device_type", "").lower() != constraints.required_device_type.lower():
@@ -72,7 +79,7 @@ class RecommendationEngine:
         # Normalization factors
         norm_lat = max(0.0, 100.0 - min(100.0, latency_ms))
         norm_fps = min(100.0, fps * 1.5)
-        norm_pwr = max(0.0, 100.0 - (power_w if power_w else 50.0))
+        norm_pwr = max(0.0, 100.0 - (measured_power_w if measured_power_w is not None else (device_tdp_w or 50.0)))
         norm_acc = (map50 * 100.0) if map50 is not None else 75.0
         norm_cost = max(0.0, 100.0 - ((cost_usd or 500.0) / 20.0))
 
@@ -94,7 +101,7 @@ class RecommendationEngine:
             latency_ms=round(latency_ms, 2),
             fps=round(fps, 1),
             memory_mb=round(memory_mb, 1),
-            power_w=round(power_w, 1) if power_w is not None else None,
+            power_w=round(measured_power_w, 1) if measured_power_w is not None else None,
             map50=round(map50, 4) if map50 is not None else None,
             accuracy_loss_pct=round(accuracy_loss_pct, 2) if accuracy_loss_pct is not None else None,
             cost_usd=cost_usd,
@@ -152,18 +159,19 @@ class RecommendationEngine:
         """
         Evaluates, eliminates violations, calculates Pareto frontier, and selects winner.
         """
-        # Find baseline FP32 accuracy if present
-        baseline_map = None
+        # Index baseline FP32 accuracy per dataset_id
+        baselines_by_dataset: Dict[Optional[str], float] = {}
         for r, _ in runs_with_devices:
-            if r.get("precision") == "fp32" and r.get("map50") is not None:
-                baseline_map = r.get("map50")
-                break
+            d_id = r.get("dataset_id")
+            if r.get("precision") == "fp32" and r.get("map50") is not None and d_id not in baselines_by_dataset:
+                baselines_by_dataset[d_id] = r.get("map50")
 
         feasible: List[CandidateScore] = []
         violated: List[CandidateScore] = []
 
         for r, d in runs_with_devices:
-            cand = cls.evaluate_candidate(r, d, constraints, baseline_map50=baseline_map)
+            b_map = baselines_by_dataset.get(r.get("dataset_id"))
+            cand = cls.evaluate_candidate(r, d, constraints, baseline_map50=b_map)
             if cand.violations:
                 violated.append(cand)
             else:

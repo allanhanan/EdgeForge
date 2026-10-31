@@ -17,6 +17,7 @@ class Settings(BaseModel):
     PROJECT_NAME: str = "EdgeForge"
     API_V1_STR: str = "/api/v1"
     DEBUG: bool = True
+    MAX_UPLOAD_SIZE_BYTES: int = 500 * 1024 * 1024  # 500 MB upload limit
     
     # Storage paths
     BASE_DIR: Path = BASE_DIR

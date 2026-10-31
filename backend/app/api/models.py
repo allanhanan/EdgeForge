@@ -32,8 +32,16 @@ async def upload_model(
     model_name = name or Path(file.filename).stem
     save_path = settings.MODELS_DIR / file.filename
 
+    # Enforce upload size limit while streaming
+    bytes_written = 0
     with open(save_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        while chunk := file.file.read(65536):
+            bytes_written += len(chunk)
+            if bytes_written > settings.MAX_UPLOAD_SIZE_BYTES:
+                buffer.close()
+                save_path.unlink(missing_ok=True)
+                raise HTTPException(status_code=413, detail=f"Model file size exceeds {settings.MAX_UPLOAD_SIZE_BYTES // (1024*1024)}MB maximum limit")
+            buffer.write(chunk)
 
     try:
         inspection = inspect_onnx_file(save_path)

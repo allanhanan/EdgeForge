@@ -13,7 +13,7 @@ from backend.app.core.config import settings
 from backend.app.core.database import get_db
 from backend.app.models.entities import DatasetRecord
 from backend.app.schemas import DatasetResponse
-from backend.app.services.accuracy_evaluator import parse_yolo_annotations
+from backend.app.services.accuracy_evaluator import parse_yolo_annotations, parse_coco_annotations
 
 router = APIRouter(prefix="/datasets", tags=["Datasets"])
 
@@ -36,14 +36,28 @@ async def upload_dataset(
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     archive_path = dest_dir / file.filename
+    bytes_written = 0
     with open(archive_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        while chunk := file.file.read(65536):
+            bytes_written += len(chunk)
+            if bytes_written > settings.MAX_UPLOAD_SIZE_BYTES:
+                buffer.close()
+                shutil.rmtree(dest_dir, ignore_errors=True)
+                raise HTTPException(status_code=413, detail=f"Dataset archive size exceeds {settings.MAX_UPLOAD_SIZE_BYTES // (1024*1024)}MB limit")
+            buffer.write(chunk)
 
-    # Extract if ZIP
+    # Extract if ZIP with strict path traversal / Zip Slip prevention
     if file.filename.endswith(".zip"):
         with zipfile.ZipFile(archive_path, "r") as zip_ref:
+            resolved_dest = dest_dir.resolve()
+            for member in zip_ref.namelist():
+                member_target = (dest_dir / member).resolve()
+                if not str(member_target).startswith(str(resolved_dest)):
+                    archive_path.unlink(missing_ok=True)
+                    shutil.rmtree(dest_dir, ignore_errors=True)
+                    raise HTTPException(status_code=400, detail=f"Malicious archive member path detected (Zip Slip): {member}")
             zip_ref.extractall(dest_dir)
-        archive_path.unlink()
+        archive_path.unlink(missing_ok=True)
 
     # Discover images and labels
     images_dir = dest_dir / "images"
@@ -54,16 +68,33 @@ async def upload_dataset(
     image_files = [f for f in images_dir.iterdir() if f.suffix.lower() in (".jpg", ".jpeg", ".png")]
     
     classes = ["class_0", "class_1", "class_2", "class_3"]
-    yaml_file = dest_dir / "data.yaml"
-    if yaml_file.exists():
-        try:
-            import yaml
-            with open(yaml_file, "r") as yf:
-                ydata = yaml.safe_load(yf)
-                if isinstance(ydata, dict) and "names" in ydata:
-                    classes = ydata["names"] if isinstance(ydata["names"], list) else list(ydata["names"].values())
-        except Exception:
-            pass
+    coco_json_path = None
+    for cand in [dest_dir / "annotations.json", dest_dir / "instances_val.json", dest_dir / "annotations" / "instances_val.json", dest_dir / "annotations" / "annotations.json"]:
+        if cand.exists():
+            coco_json_path = cand
+            break
+
+    if coco_json_path:
+        format = "coco"
+        _, parsed_classes = parse_coco_annotations(coco_json_path)
+        if parsed_classes:
+            classes = parsed_classes
+        annotations_path = str(coco_json_path)
+    elif labels_dir.exists():
+        format = "yolo"
+        annotations_path = str(labels_dir)
+        yaml_file = dest_dir / "data.yaml"
+        if yaml_file.exists():
+            try:
+                import yaml
+                with open(yaml_file, "r") as yf:
+                    ydata = yaml.safe_load(yf)
+                    if isinstance(ydata, dict) and "names" in ydata:
+                        classes = ydata["names"] if isinstance(ydata["names"], list) else list(ydata["names"].values())
+            except Exception:
+                pass
+    else:
+        annotations_path = None
 
     record = DatasetRecord(
         name=dataset_name,
@@ -71,12 +102,12 @@ async def upload_dataset(
         format=format,
         filepath=str(dest_dir),
         images_dir=str(images_dir),
-        annotations_path=str(labels_dir) if labels_dir.exists() else None,
+        annotations_path=annotations_path,
         num_samples=len(image_files),
         classes=classes,
         metadata_json={
             "num_images": len(image_files),
-            "labels_found": labels_dir.exists()
+            "labels_found": bool(annotations_path)
         }
     )
     db.add(record)
@@ -102,10 +133,14 @@ async def preview_dataset(dataset_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Dataset not found")
 
     images_dir = Path(dataset.images_dir)
-    labels_dir = Path(dataset.annotations_path) if dataset.annotations_path else None
+    ann_path = Path(dataset.annotations_path) if dataset.annotations_path else None
 
     if not images_dir.exists():
         return {"samples": []}
+
+    coco_map = {}
+    if ann_path and ann_path.exists() and ann_path.suffix.lower() == ".json":
+        coco_map, _ = parse_coco_annotations(ann_path)
 
     image_files = sorted([f for f in images_dir.iterdir() if f.suffix.lower() in (".jpg", ".jpeg", ".png")])[:6]
     samples = []
@@ -118,8 +153,10 @@ async def preview_dataset(dataset_id: str, db: AsyncSession = Depends(get_db)):
             w, h = 640, 640
 
         boxes = []
-        if labels_dir and labels_dir.exists():
-            lbl_file = labels_dir / f"{img_path.stem}.txt"
+        if coco_map and (img_path.name in coco_map or img_path.stem in coco_map):
+            boxes = coco_map.get(img_path.name, coco_map.get(img_path.stem, []))
+        elif ann_path and ann_path.exists() and ann_path.is_dir():
+            lbl_file = ann_path / f"{img_path.stem}.txt"
             if lbl_file.exists():
                 boxes = parse_yolo_annotations(lbl_file, w, h)
 

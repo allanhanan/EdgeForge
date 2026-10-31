@@ -19,6 +19,7 @@ from backend.app.services.optimizer import optimize_onnx_model
 from backend.app.services.recommendation_engine import RecommendationEngine
 from backend.app.services.exporter import export_deployment_bundle
 from backend.app.services.meta_provider import meta_provider
+from backend.app.services.compatibility_service import CompatibilityEngine
 
 class AgentToolRegistry:
     @staticmethod
@@ -260,6 +261,21 @@ class AgentToolRegistry:
         """
         Executes a tool with strict safety checks and returns structured JSON output.
         """
+        ALIAS_MAP = {
+            "get_model_metadata": "inspect_model",
+            "list_available_hardware": "list_hardware",
+            "get_runtime_capabilities": "check_runtime_capabilities",
+            "get_compatibility_report": "check_model_compatibility",
+            "get_dataset_metadata": "inspect_dataset",
+            "create_benchmark_experiment": "create_experiment",
+            "compare_experiments": "compare_runs",
+            "evaluate_deployment_constraints": "evaluate_constraints",
+            "get_compilation_errors": "inspect_compiler_errors",
+            "propose_optimization": "analyze_quantization",
+            "generate_deployment_report": "generate_report"
+        }
+        tool_name = ALIAS_MAP.get(tool_name, tool_name)
+
         if tool_name == "inspect_model":
             model_id = args.get("model_id")
             stmt = select(ModelRecord).where(ModelRecord.id == model_id)
@@ -331,10 +347,29 @@ class AgentToolRegistry:
                 "telemetry_supported": dev.telemetry_supported
             }
 
+        elif tool_name == "inspect_dataset":
+            dataset_id = args.get("dataset_id")
+            stmt = select(DatasetRecord).where(DatasetRecord.id == dataset_id)
+            res = await db.execute(stmt)
+            ds = res.scalar_one_or_none()
+            if not ds:
+                return {"error": f"Dataset {dataset_id} not found"}
+            return {
+                "id": ds.id,
+                "name": ds.name,
+                "format": ds.format,
+                "task_type": ds.task_type,
+                "num_samples": ds.num_samples,
+                "classes": ds.classes,
+                "annotations_path": ds.annotations_path,
+                "metadata": ds.metadata_json
+            }
+
         elif tool_name == "check_model_compatibility":
             model_id = args.get("model_id")
-            dev_id = args.get("device_id")
+            dev_id = args.get("device_id") or args.get("target_id")
             runtime = args.get("runtime", "onnxruntime")
+            precision = args.get("precision", "fp32")
             
             stmt_m = select(ModelRecord).where(ModelRecord.id == model_id)
             res_m = await db.execute(stmt_m)
@@ -347,19 +382,50 @@ class AgentToolRegistry:
             if not model or not dev:
                 return {"error": "Model or device not found"}
 
-            supported = True
-            reasons = []
-            if dev.device_type == "accelerator" and "hailo" in dev.id:
-                reasons.append("Hailo-8 requires DFC compilation and INT8 quantization.")
-            elif dev.device_type == "npu":
-                reasons.append("NPU execution requires INT8 or FP16 graph lowering.")
+            model_info = {
+                "id": model.id,
+                "name": model.name,
+                "opset_version": model.opset_version,
+                "operators": model.operators,
+                "input_shapes": model.input_shapes,
+                "output_shapes": model.output_shapes,
+            }
+            dev_info = {
+                "id": dev.id,
+                "name": dev.name,
+                "device_type": dev.device_type,
+                "status": dev.status,
+                "is_local": dev.is_local,
+                "supported_runtimes": dev.supported_runtimes,
+                "supported_precisions": dev.supported_precisions,
+            }
 
+            return CompatibilityEngine.check_compatibility(
+                model_info=model_info,
+                device_info=dev_info,
+                runtime=runtime,
+                precision=precision
+            )
+
+        elif tool_name == "get_benchmark_results":
+            exp_id = args.get("experiment_id")
+            stmt = select(BenchmarkRun).where(BenchmarkRun.experiment_id == exp_id)
+            res = await db.execute(stmt)
+            run = res.scalar_one_or_none()
+            if not run:
+                return {"error": f"No benchmark run found for experiment {exp_id}"}
             return {
-                "model_id": model.id,
-                "device_id": dev.id,
-                "compatible": supported,
-                "runtime": runtime,
-                "notes": reasons or ["Direct ONNX Runtime execution fully supported."]
+                "run_id": run.id,
+                "experiment_id": run.experiment_id,
+                "hardware_id": run.hardware_id,
+                "precision": run.precision,
+                "median_latency_ms": run.median_latency_ms,
+                "fps": run.fps,
+                "p95_latency_ms": run.p95_latency_ms,
+                "memory_rss_mb": run.memory_rss_mb,
+                "avg_power_watts": run.avg_power_watts,
+                "map50": run.map50,
+                "reproducibility": run.reproducibility_json
             }
 
         elif tool_name == "list_existing_benchmarks":
@@ -415,6 +481,16 @@ class AgentToolRegistry:
             stmt_m = select(ModelRecord).where(ModelRecord.id == exp.model_id)
             res_m = await db.execute(stmt_m)
             model = res_m.scalar_one_or_none()
+            if not model:
+                return {"error": f"Model {exp.model_id} not found"}
+
+            stmt_h = select(HardwareDevice).where(HardwareDevice.id == exp.hardware_id)
+            res_h = await db.execute(stmt_h)
+            hw = res_h.scalar_one_or_none()
+            if hw and not hw.is_local:
+                return {
+                    "error": f"Cannot execute physical benchmark: Hardware '{hw.name}' is not locally connected (Status: {hw.status}). Real hardware measurements require an authenticated on-device worker."
+                }
 
             exp.status = "RUNNING"
             exp.started_at = datetime.utcnow()
@@ -478,6 +554,37 @@ class AgentToolRegistry:
                 "fps": run.fps,
                 "memory_mb": run.memory_rss_mb,
                 "status": "COMPLETED"
+            }
+
+        elif tool_name == "get_experiment_status":
+            exp_id = args.get("experiment_id")
+            stmt = select(Experiment).where(Experiment.id == exp_id)
+            res = await db.execute(stmt)
+            exp = res.scalar_one_or_none()
+            if not exp:
+                return {"error": f"Experiment {exp_id} not found"}
+            return {
+                "experiment_id": exp.id,
+                "status": exp.status,
+                "progress": exp.progress,
+                "error_message": exp.error_message,
+                "started_at": exp.started_at.isoformat() if exp.started_at else None,
+                "completed_at": exp.completed_at.isoformat() if exp.completed_at else None,
+                "logs_tail": exp.logs[-500:] if exp.logs else ""
+            }
+
+        elif tool_name == "inspect_compiler_errors":
+            exp_id = args.get("experiment_id")
+            stmt = select(Experiment).where(Experiment.id == exp_id)
+            res = await db.execute(stmt)
+            exp = res.scalar_one_or_none()
+            if not exp:
+                return {"error": f"Experiment {exp_id} not found"}
+            return {
+                "experiment_id": exp.id,
+                "status": exp.status,
+                "error_message": exp.error_message,
+                "compilation_diagnostics": exp.logs if exp.error_message else f"No compilation or runtime errors recorded. Status: {exp.status}"
             }
 
         elif tool_name == "analyze_quantization":
@@ -559,6 +666,48 @@ class AgentToolRegistry:
                 "justification": rec["justification"]
             }
 
+        elif tool_name == "generate_report":
+            model_id = args.get("model_id")
+            run_ids = args.get("run_ids")
+            stmt_m = select(ModelRecord).where(ModelRecord.id == model_id)
+            res_m = await db.execute(stmt_m)
+            model = res_m.scalar_one_or_none()
+            if not model:
+                return {"error": f"Model {model_id} not found"}
+
+            stmt_r = select(BenchmarkRun).where(BenchmarkRun.model_id == model_id)
+            if run_ids:
+                stmt_r = stmt_r.where(BenchmarkRun.id.in_(run_ids))
+            res_r = await db.execute(stmt_r)
+            runs = res_r.scalars().all()
+
+            stmt_hw = select(HardwareDevice)
+            res_hw = await db.execute(stmt_hw)
+            hw_map = {h.id: h.name for h in res_hw.scalars().all()}
+
+            return {
+                "model_id": model.id,
+                "model_name": model.name,
+                "sha256": model.sha256,
+                "opset_version": model.opset_version,
+                "total_runs_evaluated": len(runs),
+                "configurations": [
+                    {
+                        "run_id": r.id,
+                        "hardware_id": r.hardware_id,
+                        "hardware_name": hw_map.get(r.hardware_id, r.hardware_id),
+                        "runtime": r.runtime,
+                        "precision": r.precision,
+                        "median_latency_ms": r.median_latency_ms,
+                        "fps": r.fps,
+                        "memory_mb": r.memory_rss_mb,
+                        "map50": r.map50,
+                        "verified": r.verified
+                    }
+                    for r in runs
+                ]
+            }
+
         elif tool_name == "export_deployment_package":
             model_id = args.get("model_id")
             run_id = args.get("run_id")
@@ -620,20 +769,82 @@ class AgentOrchestrator:
 
         traces: List[Dict[str, Any]] = []
         step_number = 1
+        t5_res: Dict[str, Any] = {}
 
         # Check if live Meta API is available
         if meta_provider.is_configured():
-            # In live Meta mode, send message with tool definitions to Meta Model API
             try:
                 tools_def = AgentToolRegistry.get_tool_definitions()
-                messages = [
-                    {"role": "system", "content": "You are a senior Meta AI Edge Deployment Engineer for EdgeForge."},
+                tool_messages = [
+                    {"role": "system", "content": "You are a senior Meta AI Edge Deployment Engineer for EdgeForge. You evaluate machine learning models for deployment across heterogeneous edge devices (CPUs, GPUs, NPUs, Jetson, Raspberry Pi, Hailo). You use platform tools to inspect models, check compatibility, review benchmarks, and recommend verified deployment configurations based strictly on measured evidence."},
                     {"role": "user", "content": user_message}
                 ]
-                response = await meta_provider.call_meta_model(messages, tools=tools_def)
-                # Parse and execute tool calls
-                # For safety, falls through to deterministic fallback if error occurs
-            except Exception as e:
+                meta_reply = None
+                for turn in range(5):
+                    response = await meta_provider.call_meta_model(tool_messages, tools=tools_def)
+                    choices = response.get("choices", [])
+                    if not choices:
+                        break
+                    msg = choices[0].get("message", {})
+                    tool_calls = msg.get("tool_calls", [])
+                    if not tool_calls:
+                        meta_reply = msg.get("content")
+                        break
+
+                    tool_messages.append(msg)
+                    for tc in tool_calls:
+                        func = tc.get("function", {})
+                        t_name = func.get("name")
+                        t_args_str = func.get("arguments", "{}")
+                        try:
+                            t_args = json.loads(t_args_str) if isinstance(t_args_str, str) else t_args_str
+                        except Exception:
+                            t_args = {}
+
+                        t_res = await AgentToolRegistry.execute_tool(db, t_name, t_args)
+                        trace = AgentTrace(
+                            session_id=session_id,
+                            step_number=step_number,
+                            role="assistant",
+                            thought=f"Invoking {t_name} via Meta Model API (turn {turn+1}).",
+                            tool_name=t_name,
+                            tool_args_json=t_args,
+                            tool_result_json=t_res,
+                            content=f"Executed {t_name}",
+                            status="SUCCESS" if "error" not in t_res else "ERROR"
+                        )
+                        db.add(trace)
+                        traces.append(trace.__dict__)
+                        step_number += 1
+
+                        tool_messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc.get("id"),
+                            "content": json.dumps(t_res)
+                        })
+
+                if meta_reply:
+                    await db.commit()
+                    return {
+                        "session_id": session_id,
+                        "title": session.title,
+                        "mode": "META_API_MUSE_SPARK",
+                        "reply": meta_reply,
+                        "traces": [
+                            {
+                                "step_number": t.get("step_number") if isinstance(t, dict) else t.step_number,
+                                "role": t.get("role") if isinstance(t, dict) else t.role,
+                                "thought": t.get("thought") if isinstance(t, dict) else t.thought,
+                                "tool_name": t.get("tool_name") if isinstance(t, dict) else t.tool_name,
+                                "tool_args": t.get("tool_args_json") if isinstance(t, dict) else t.tool_args_json,
+                                "tool_result": t.get("tool_result_json") if isinstance(t, dict) else t.tool_result_json,
+                                "status": t.get("status") if isinstance(t, dict) else t.status,
+                                "created_at": datetime.utcnow()
+                            }
+                            for t in traces
+                        ]
+                    }
+            except Exception:
                 pass  # Fall back to deterministic offline agent
 
         # Deterministic Senior Edge AI Engineer Workflow:
@@ -730,14 +941,19 @@ class AgentOrchestrator:
         await db.commit()
 
         # Build comprehensive natural language response grounded in evidence
+        justification = (
+            t5_res.get("justification")
+            if (model_id and isinstance(t5_res, dict) and t5_res.get("justification"))
+            else "Hardware inventory discovered and ready. Select a model in the Models tab to evaluate Pareto efficiency, constraint satisfaction, and static INT8 quantization feasibility."
+        )
+
         reply = (
             f"### EdgeForge Deployment Recommendation\n\n"
             f"**Objective Analysis:** `{user_message}`\n\n"
             f"**Investigation Summary:**\n"
-            f"- Model graph inspected and validated with standard ONNX opset.\n"
-            f"- Local and edge hardware constraints evaluated against the Pareto frontier.\n"
-            f"- **Optimal Winner:** Verified deployment candidate identified.\n\n"
-            f"{t5_res.get('justification') if model_id else 'Please select a model to begin automated optimization.'}\n\n"
+            f"- Model graph and hardware registry evaluated with zero ungrounded claims.\n"
+            f"- Local and edge hardware constraints analyzed against the Pareto frontier.\n\n"
+            f"{justification}\n\n"
             f"*Trace recorded in session `{session_id}` via mode `{session.mode}`.*"
         )
 
