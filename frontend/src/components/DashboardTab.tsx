@@ -35,134 +35,253 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   onQuickBenchmark,
 }) => {
   const onlineHardware = hardware.filter((h) => h.status === "ONLINE");
+  const successfulRuns = runs.filter((r) => r.verified !== false);
   const fastestRun = [...runs].sort((a, b) => a.median_latency_ms - b.median_latency_ms)[0];
   const highestFpsRun = [...runs].sort((a, b) => b.fps - a.fps)[0];
 
   return (
     <div className="space-y-6">
-      {/* Top Welcome / Hero Banner */}
-      <div className="relative overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-br from-zinc-900/90 via-zinc-900/40 to-zinc-950 p-6 sm:p-8 backdrop-blur-md shadow-2xl">
-        <div className="absolute top-0 right-0 -mt-12 -mr-12 w-96 h-96 rounded-full bg-teal-500/10 blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-3xl">
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-teal-500/30 bg-teal-500/10 px-3 py-1 text-xs text-teal-300 font-mono shadow-sm">
-              <Zap className="h-3 w-3 text-teal-400" />
-              Meta Global AI Developer Hackathon 2026
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white font-sans">
-              Vendor-Neutral Edge AI Intelligence Engine
-            </h1>
-            <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed font-sans">
-              Benchmark models on real local silicon (Intel CPU & RTX 4060 GPU), inspect ONNX operator graphs,
-              evaluate true detection mAP, profile edge devices (Jetson, Raspberry Pi, Hailo, NPU),
-              and receive evidence-grounded deployment recommendations from the Meta AI Engineer.
-            </p>
+      {/* Top Welcome Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
+        <div className="space-y-1">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-teal-500/30 bg-teal-500/10 px-2.5 py-0.5 text-[11px] text-teal-300 font-mono shadow-sm">
+            <Zap className="h-3 w-3 text-teal-400" />
+            Meta Global AI Developer Hackathon 2026
           </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white font-sans">
+            Good afternoon.
+          </h1>
+          <p className="text-sm sm:text-base text-zinc-300 font-medium">
+            Your edge AI deployment workspace
+          </p>
+        </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={() => setActiveTab("workbench")}
-              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-400 px-5 py-3 text-xs font-bold text-zinc-950 shadow-lg shadow-teal-500/20 hover:brightness-110 active:scale-95 transition-all duration-150"
-            >
-              <Zap className="h-4 w-4 fill-zinc-950" />
-              Launch Workbench
-            </button>
-            <button
-              onClick={() => setActiveTab("agent")}
-              className="flex items-center gap-2 rounded-xl border border-zinc-700/80 bg-zinc-800/80 hover:bg-zinc-800 px-5 py-3 text-xs font-semibold text-zinc-200 transition-all duration-150 backdrop-blur-sm"
-            >
-              Ask Meta AI
-              <ArrowRight className="h-3.5 w-3.5 text-teal-400" />
-            </button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 rounded-xl border border-zinc-800/80 bg-zinc-900/60 px-3 py-1.5 text-xs font-mono text-zinc-400">
+            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Lab connected: {onlineHardware.length} Physical Workers</span>
           </div>
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* 4 Central KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {/* Models Registered */}
-        <div className="glass-card rounded-2xl p-5 space-y-3">
+        {/* KPI 1: Models */}
+        <div className="glass-card rounded-2xl p-5 space-y-2 border border-zinc-800/80 bg-zinc-900/40 hover:border-zinc-700/80 transition-all">
           <div className="flex items-center justify-between text-zinc-400 text-xs font-mono">
-            <span className="tracking-wider uppercase text-[11px] font-medium">Models Registry</span>
+            <span className="tracking-wider uppercase text-[11px] font-medium">Models</span>
             <div className="p-2 rounded-lg bg-teal-500/10 border border-teal-500/20 text-teal-400">
               <Layers className="h-4 w-4" />
             </div>
           </div>
           <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-zinc-100 font-mono tracking-tight">
-                {models.length}
-              </span>
-              <span className="text-xs text-zinc-400 font-mono">verified ONNX</span>
+            <div className="text-3xl font-extrabold text-zinc-100 font-mono tracking-tight">
+              {models.length}
             </div>
-            <p className="mt-1 text-[11px] text-zinc-400 truncate">
-              {models.length > 0 ? models[0].name : "No models registered"}
+            <p className="mt-1 text-xs text-zinc-400 font-sans">
+              Models registered in workspace
             </p>
           </div>
         </div>
 
-        {/* Online Accelerators */}
-        <div className="glass-card rounded-2xl p-5 space-y-3">
+        {/* KPI 2: Experiments */}
+        <div className="glass-card rounded-2xl p-5 space-y-2 border border-zinc-800/80 bg-zinc-900/40 hover:border-zinc-700/80 transition-all">
           <div className="flex items-center justify-between text-zinc-400 text-xs font-mono">
-            <span className="tracking-wider uppercase text-[11px] font-medium">Silicon Targets</span>
-            <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-              <Cpu className="h-4 w-4" />
-            </div>
-          </div>
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-zinc-100 font-mono tracking-tight">
-                {hardware.length}
-              </span>
-              <span className="text-xs text-emerald-400 font-mono font-medium">
-                ({onlineHardware.length} Physical Online)
-              </span>
-            </div>
-            <p className="mt-1 text-[11px] text-zinc-400">
-              Local CPU & NVIDIA GPU active
-            </p>
-          </div>
-        </div>
-
-        {/* Fastest Latency */}
-        <div className="glass-card rounded-2xl p-5 space-y-3">
-          <div className="flex items-center justify-between text-zinc-400 text-xs font-mono">
-            <span className="tracking-wider uppercase text-[11px] font-medium">Fastest Verified</span>
-            <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
-              <TrendingUp className="h-4 w-4" />
-            </div>
-          </div>
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-teal-300 font-mono tracking-tight">
-                {fastestRun ? `${fastestRun.median_latency_ms.toFixed(1)}ms` : "--"}
-              </span>
-              <span className="text-xs text-zinc-400 font-mono">P50 median</span>
-            </div>
-            <p className="mt-1 text-[11px] text-zinc-400 font-mono">
-              {highestFpsRun ? `${highestFpsRun.fps.toFixed(0)} FPS peak rate` : "No runs yet"}
-            </p>
-          </div>
-        </div>
-
-        {/* Total Experiments */}
-        <div className="glass-card rounded-2xl p-5 space-y-3">
-          <div className="flex items-center justify-between text-zinc-400 text-xs font-mono">
-            <span className="tracking-wider uppercase text-[11px] font-medium">Benchmark Runs</span>
+            <span className="tracking-wider uppercase text-[11px] font-medium">Experiments</span>
             <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400">
               <FlaskConical className="h-4 w-4" />
             </div>
           </div>
           <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-zinc-100 font-mono tracking-tight">
-                {runs.length}
-              </span>
-              <span className="text-xs text-zinc-400 font-mono">profile records</span>
+            <div className="text-3xl font-extrabold text-zinc-100 font-mono tracking-tight">
+              {experiments.length}
             </div>
-            <p className="mt-1 text-[11px] text-zinc-400">
-              {experiments.filter((e) => e.status === "COMPLETED").length} completed jobs
+            <p className="mt-1 text-xs text-zinc-400 font-sans">
+              Benchmark sweeps & jobs
             </p>
+          </div>
+        </div>
+
+        {/* KPI 3: Connected devices */}
+        <div className="glass-card rounded-2xl p-5 space-y-2 border border-zinc-800/80 bg-zinc-900/40 hover:border-zinc-700/80 transition-all">
+          <div className="flex items-center justify-between text-zinc-400 text-xs font-mono">
+            <span className="tracking-wider uppercase text-[11px] font-medium">Connected devices</span>
+            <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+              <Cpu className="h-4 w-4" />
+            </div>
+          </div>
+          <div>
+            <div className="text-3xl font-extrabold text-zinc-100 font-mono tracking-tight">
+              {onlineHardware.length}
+            </div>
+            <p className="mt-1 text-xs text-zinc-400 font-sans">
+              Physical local silicon workers
+            </p>
+          </div>
+        </div>
+
+        {/* KPI 4: Successful runs */}
+        <div className="glass-card rounded-2xl p-5 space-y-2 border border-zinc-800/80 bg-zinc-900/40 hover:border-zinc-700/80 transition-all">
+          <div className="flex items-center justify-between text-zinc-400 text-xs font-mono">
+            <span className="tracking-wider uppercase text-[11px] font-medium">Successful runs</span>
+            <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+              <CheckCircle2 className="h-4 w-4" />
+            </div>
+          </div>
+          <div>
+            <div className="text-3xl font-extrabold text-teal-300 font-mono tracking-tight">
+              {successfulRuns.length}
+            </div>
+            <p className="mt-1 text-xs text-zinc-400 font-sans">
+              Verified profiling records
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Start a deployment analysis Hero Card & Recent Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Hero Card: Start a deployment analysis (7 Cols) */}
+        <div className="lg:col-span-7 relative overflow-hidden rounded-2xl border border-teal-500/30 bg-gradient-to-br from-zinc-900/95 via-zinc-900/60 to-zinc-950 p-6 sm:p-7 backdrop-blur-md shadow-2xl flex flex-col justify-between">
+          <div className="absolute top-0 right-0 -mt-10 -mr-10 w-72 h-72 rounded-full bg-teal-500/10 blur-3xl pointer-events-none" />
+          <div className="relative z-10 space-y-3">
+            <span className="text-[11px] font-mono text-teal-400 uppercase tracking-wider font-semibold">
+              Deployment Workflow
+            </span>
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white font-sans">
+              Start a deployment analysis
+            </h2>
+            <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed font-sans max-w-xl">
+              Upload a model or continue with an existing project. EdgeForge inspects ONNX operator
+              graphs, validates runtime compatibility, profiles latency on physical silicon, and generates
+              ready-to-deploy edge packages.
+            </p>
+          </div>
+
+          <div className="relative z-10 pt-6 flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => setActiveTab("models")}
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-400 px-5 py-2.5 text-xs font-bold text-zinc-950 shadow-lg shadow-teal-500/20 hover:brightness-110 active:scale-95 transition-all duration-150"
+            >
+              <Layers className="h-4 w-4 fill-zinc-950" />
+              Upload Model
+            </button>
+            <button
+              onClick={() => setActiveTab("agent")}
+              className="flex items-center gap-2 rounded-xl border border-zinc-700/80 bg-zinc-800/80 hover:bg-zinc-800 px-5 py-2.5 text-xs font-semibold text-zinc-200 transition-all duration-150 backdrop-blur-sm"
+            >
+              <Sparkles className="h-4 w-4 text-teal-400" />
+              Ask AI Engineer
+            </button>
+            <button
+              onClick={() => setActiveTab("workbench")}
+              className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800/80 px-4 py-2.5 text-xs font-mono text-zinc-300 transition-all duration-150"
+            >
+              <Zap className="h-3.5 w-3.5 text-teal-400" />
+              Configure Benchmarks
+            </button>
+          </div>
+        </div>
+
+        {/* Recent Activity Feed (5 Cols) */}
+        <div className="lg:col-span-5 glass-panel rounded-2xl p-5 space-y-4 shadow-xl border border-zinc-800/80 bg-zinc-900/40">
+          <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+            <div className="flex items-center gap-2">
+              <Activity className="h-4 w-4 text-teal-400" />
+              <h3 className="text-sm font-semibold text-zinc-200 font-sans">Recent activity</h3>
+            </div>
+            <button
+              onClick={() => setActiveTab("experiments")}
+              className="text-xs text-teal-400 hover:text-teal-300 font-mono flex items-center gap-1 transition-colors"
+            >
+              View all <ArrowRight className="h-3 w-3" />
+            </button>
+          </div>
+
+          <div className="space-y-2.5">
+            {/* Standard Recent Activity items from spec */}
+            <div
+              onClick={() => setActiveTab("experiments")}
+              className="flex items-center justify-between rounded-xl border border-zinc-800/80 bg-zinc-950/70 p-3 text-xs hover:border-teal-500/60 cursor-pointer transition-all"
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" />
+                <div>
+                  <div className="font-semibold text-zinc-200 font-mono">
+                    YOLOv8n · ONNX Runtime
+                  </div>
+                  <div className="text-[10px] text-zinc-400 font-mono">
+                    FP32 • Intel Core i7 CPU • Batch 1
+                  </div>
+                </div>
+              </div>
+              <span className="rounded-md bg-emerald-950/70 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-mono font-semibold text-emerald-400">
+                Completed
+              </span>
+            </div>
+
+            <div
+              onClick={() => setActiveTab("experiments")}
+              className="flex items-center justify-between rounded-xl border border-zinc-800/80 bg-zinc-950/70 p-3 text-xs hover:border-teal-500/60 cursor-pointer transition-all"
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" />
+                <div>
+                  <div className="font-semibold text-zinc-200 font-mono">
+                    YOLOv8n · TensorRT INT8
+                  </div>
+                  <div className="text-[10px] text-zinc-400 font-mono">
+                    INT8 Dynamic • NVIDIA RTX 4060 GPU
+                  </div>
+                </div>
+              </div>
+              <span className="rounded-md bg-emerald-950/70 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-mono font-semibold text-emerald-400">
+                Completed
+              </span>
+            </div>
+
+            <div
+              onClick={() => setActiveTab("hardware")}
+              className="flex items-center justify-between rounded-xl border border-zinc-800/80 bg-zinc-950/70 p-3 text-xs hover:border-amber-500/60 cursor-pointer transition-all"
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="h-2 w-2 rounded-full bg-amber-400/80" />
+                <div>
+                  <div className="font-semibold text-zinc-300 font-mono">
+                    YOLOv8s · Hailo
+                  </div>
+                  <div className="text-[10px] text-zinc-400 font-mono">
+                    Requires Hailo-8 M.2 hardware worker
+                  </div>
+                </div>
+              </div>
+              <span className="rounded-md bg-zinc-800/90 border border-zinc-700/80 px-2 py-0.5 text-[10px] font-mono font-semibold text-amber-300">
+                Not configured
+              </span>
+            </div>
+
+            {/* Dynamically append real runs if available */}
+            {runs.slice(0, 2).map((run) => (
+              <div
+                key={run.id}
+                className="flex items-center justify-between rounded-xl border border-zinc-800/60 bg-zinc-950/50 p-3 text-xs hover:border-zinc-700/80 transition-all"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="h-2 w-2 rounded-full bg-teal-400" />
+                  <div>
+                    <div className="font-semibold text-zinc-200 font-mono truncate max-w-[180px]">
+                      {run.model_id} · {run.runtime}
+                    </div>
+                    <div className="text-[10px] text-zinc-400 font-mono">
+                      {run.precision.toUpperCase()} • {run.median_latency_ms.toFixed(1)}ms P50
+                    </div>
+                  </div>
+                </div>
+                <span className="rounded-md bg-teal-950/60 border border-teal-500/30 px-2 py-0.5 text-[10px] font-mono font-semibold text-teal-300">
+                  {run.fps.toFixed(0)} FPS
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       </div>

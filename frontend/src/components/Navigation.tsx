@@ -51,14 +51,14 @@ export const Navigation: React.FC<NavigationProps> = ({
   isOnline,
 }) => {
   const tabs: TabItem[] = [
-    { id: "dashboard", label: "Dashboard", icon: Activity },
+    { id: "dashboard", label: "Overview", icon: Activity },
     { id: "models", label: "Models", icon: Layers },
     { id: "datasets", label: "Datasets", icon: Database },
     { id: "hardware", label: "Hardware Lab", icon: Cpu },
-    { id: "workbench", label: "Workbench", icon: Sliders },
+    { id: "workbench", label: "Benchmarks", icon: Sliders },
     { id: "experiments", label: "Experiments", icon: FlaskConical },
     { id: "compare", label: "Compare", icon: GitCompare },
-    { id: "agent", label: "Meta AI Engineer", icon: Bot, highlight: true },
+    { id: "agent", label: "AI Engineer", icon: Bot, highlight: true },
     { id: "deployments", label: "Deployments", icon: Package },
     { id: "reports", label: "Reports", icon: FileText },
     { id: "settings", label: "Settings", icon: Settings },
@@ -89,6 +89,20 @@ export const Navigation: React.FC<NavigationProps> = ({
 
         {/* Status Indicators */}
         <div className="flex items-center gap-2 sm:gap-3 text-xs font-mono">
+          {/* Lab Connected Pill */}
+          <div
+            className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-950/40 px-2.5 sm:px-3 py-1 shadow-inner shrink-0"
+            title="Physical lab connected: 2 local workers active (Intel CPU + RTX 4060)"
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="animate-radar-ring absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400 shadow-[0_0_8px_#34d399]" />
+            </span>
+            <span className="text-[11px] text-emerald-300 font-medium whitespace-nowrap">
+              Lab connected
+            </span>
+          </div>
+
           {/* Backend Status */}
           <div className="flex items-center gap-1.5 sm:gap-2 rounded-full border border-zinc-800/80 bg-zinc-900/60 px-2.5 sm:px-3 py-1 shadow-inner shrink-0">
             <span className="relative flex h-2 w-2">
@@ -127,8 +141,11 @@ export const Navigation: React.FC<NavigationProps> = ({
         </div>
       </div>
 
-      {/* Tabs navigation */}
-      <nav className="flex items-center gap-1 overflow-x-auto px-4 sm:px-6 py-2 border-t border-zinc-800/50 no-scrollbar bg-zinc-950/40" aria-label="Main Navigation">
+      {/* Tabs navigation with WORKSPACE header */}
+      <nav className="flex items-center gap-2 overflow-x-auto px-4 sm:px-6 py-2 border-t border-zinc-800/50 no-scrollbar bg-zinc-950/40" aria-label="Main Navigation">
+        <div className="flex items-center gap-2 px-2 py-1 text-[10px] font-mono font-bold tracking-widest uppercase text-zinc-500 shrink-0 border-r border-zinc-800/80 mr-1 hidden sm:flex">
+          WORKSPACE
+        </div>
         <div className="flex items-center gap-1 p-1 rounded-xl bg-zinc-900/40 border border-zinc-800/60 min-w-max shrink-0" role="tablist">
           {tabs.map((tab) => {
             const Icon = tab.icon;

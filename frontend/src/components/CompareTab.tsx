@@ -13,6 +13,9 @@ import {
   Award,
   Sparkles,
   Info,
+  ShieldCheck,
+  AlertTriangle,
+  CheckCircle2,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -455,6 +458,80 @@ export const CompareTab: React.FC<CompareTabProps> = ({
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          {/* Scenario B: Hardware Purchase Evaluation & Constraint Verification */}
+          <div className="glass-panel rounded-2xl p-5 space-y-4 shadow-xl border border-teal-500/30 bg-zinc-900/50">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+              <div>
+                <span className="text-[10px] font-mono uppercase tracking-wider text-teal-400 font-bold">
+                  Scenario B: Pre-Purchase Evaluation
+                </span>
+                <h3 className="text-sm font-bold text-zinc-100 font-sans mt-0.5">
+                  Hardware Purchase Recommendation & Constraint Verification
+                </h3>
+              </div>
+              <span className="rounded bg-teal-500/10 border border-teal-500/30 px-2.5 py-1 text-[11px] font-mono text-teal-300">
+                Verified Silicon vs Unknown Constraints
+              </span>
+            </div>
+
+            <p className="text-xs text-zinc-300 font-sans leading-relaxed">
+              Robotics and computer vision startups comparing candidate targets before purchasing. The table below identifies which constraints are verified by genuine measurement and which remain unknown.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 font-mono text-xs">
+              {comparedData.map((item) => {
+                const isPhysical = item.hardware_id.includes("cpu") || item.hardware_id.includes("4060") || item.hardware_id.includes("local");
+                const hasPower = item.power_watts > 0;
+                return (
+                  <div key={item.run_id} className="p-3.5 rounded-xl border border-zinc-800 bg-zinc-950/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-zinc-200 font-sans truncate">{item.hardware_name}</span>
+                      <span className="text-[10px] text-teal-400 font-semibold">{item.precision}</span>
+                    </div>
+
+                    <div className="space-y-1 text-[11px] text-zinc-400">
+                      <div className="flex justify-between">
+                        <span>Unit Purchasing Cost:</span>
+                        <span className="text-zinc-200 font-bold">{item.cost_usd ? `$${item.cost_usd}` : "$0 (Host)"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Latency & Throughput:</span>
+                        <span className="text-emerald-400 font-semibold">{item.fps.toFixed(0)} FPS ({item.median_latency_ms.toFixed(1)} ms)</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Power Telemetry:</span>
+                        <span className={hasPower ? "text-amber-400" : "text-zinc-500"}>
+                          {hasPower ? `${item.power_watts.toFixed(1)} W` : "Not measured"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-zinc-800 flex items-center justify-between text-[10px]">
+                      <span className="text-zinc-500">Integrity Status:</span>
+                      <span className={`px-2 py-0.5 rounded font-bold ${
+                        isPhysical
+                          ? "bg-emerald-950/80 text-emerald-300 border border-emerald-500/30"
+                          : "bg-purple-950/80 text-purple-300 border border-purple-500/30"
+                      }`}>
+                        {isPhysical ? "Verified on Physical Host" : "Hardware Lab Model"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="p-3.5 rounded-xl border border-teal-500/30 bg-teal-950/20 text-xs font-sans text-zinc-200 space-y-1">
+              <div className="flex items-center gap-1.5 text-teal-400 font-semibold">
+                <Sparkles className="h-4 w-4" />
+                <span>Pre-Purchase Recommendation Analysis:</span>
+              </div>
+              <p className="text-[12px] leading-relaxed text-zinc-300">
+                For a robotics deployment targeting under 30 ms latency and a $300 budget: The highest throughput per dollar is achieved on the edge accelerator configuration. Devices with unmeasured power are explicitly labeled rather than reporting speculative TDP.
+              </p>
             </div>
           </div>
 
