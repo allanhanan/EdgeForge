@@ -16,6 +16,11 @@ import {
   Shield,
   Server,
   Zap,
+  Briefcase,
+  Users,
+  Building,
+  Terminal,
+  Globe,
 } from "lucide-react";
 import {
   MetaStatus,
@@ -274,6 +279,120 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             <span className="text-zinc-400">Deployment Exports:</span>
             <span className="text-zinc-200">/home/allan/project/metaHackathon/backend/storage/exports</span>
           </div>
+        </div>
+      </div>
+
+      {/* Target Personas & Commercial Deployment Scenarios (Section 7) */}
+      <div className="glass-panel rounded-2xl p-5 sm:p-6 space-y-5 shadow-xl">
+        <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+          <div className="flex items-center gap-2">
+            <Briefcase className="h-4 w-4 text-emerald-400" />
+            <h3 className="text-sm font-semibold text-zinc-200">
+              Target Personas & Commercial Deployment Editions (Platform Roadmap)
+            </h3>
+          </div>
+          <span className="text-[10px] text-zinc-400 font-mono">
+            Hackathon MVP + Production SaaS Architecture
+          </span>
+        </div>
+
+        {/* 5 Supported Personas */}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 space-y-1.5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-teal-300">
+              <Cpu className="h-3.5 w-3.5 text-teal-400" />
+              Robotics & Embedded
+            </div>
+            <p className="text-[11px] text-zinc-400 leading-relaxed font-sans">
+              Require low latency, thermal stability, power bounds, and ready-to-run export packages.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 space-y-1.5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-cyan-300">
+              <Terminal className="h-3.5 w-3.5 text-cyan-400" />
+              ML Engineers
+            </div>
+            <p className="text-[11px] text-zinc-400 leading-relaxed font-sans">
+              Demand reproducible metrics, runtime comparisons, quantization experiments, and regression audits.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 space-y-1.5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-300">
+              <Activity className="h-3.5 w-3.5 text-emerald-400" />
+              CV & Manufacturing
+            </div>
+            <p className="text-[11px] text-zinc-400 leading-relaxed font-sans">
+              Focus on predictable multi-camera inference, hardware cost control, and zero deployment regressions.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 space-y-1.5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-amber-300">
+              <Server className="h-3.5 w-3.5 text-amber-400" />
+              Hardware Vendors
+            </div>
+            <p className="text-[11px] text-zinc-400 leading-relaxed font-sans">
+              Test customer model compatibility and publish independently verified benchmarks without bias.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 space-y-1.5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-purple-300">
+              <Building className="h-3.5 w-3.5 text-purple-400" />
+              Enterprise Platform
+            </div>
+            <p className="text-[11px] text-zinc-400 leading-relaxed font-sans">
+              Deploy private device laboratories, RBAC access controls, model governance, and CI/CD automation.
+            </p>
+          </div>
+        </div>
+
+        {/* Commercial Offerings Table */}
+        <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/80 overflow-hidden text-xs">
+          <table className="w-full text-left">
+            <thead className="border-b border-zinc-800 bg-zinc-900/50 text-[10px] font-mono uppercase text-zinc-400">
+              <tr>
+                <th className="px-4 py-2.5">Product Offering</th>
+                <th className="px-4 py-2.5">Target Customer</th>
+                <th className="px-4 py-2.5">Usage & Capability</th>
+                <th className="px-4 py-2.5">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-800/60 font-mono text-[11px] text-zinc-300">
+              <tr>
+                <td className="px-4 py-2 font-semibold text-teal-300">Local Developer Edition</td>
+                <td className="px-4 py-2 text-zinc-400">Students, independent engineers</td>
+                <td className="px-4 py-2">Runs local CPU/GPU benchmarks, ONNX inspector, and offline agent</td>
+                <td className="px-4 py-2"><span className="text-emerald-400 font-bold">● Active (Hackathon)</span></td>
+              </tr>
+              <tr>
+                <td className="px-4 py-2 font-semibold text-teal-300">Hosted Benchmark Lab</td>
+                <td className="px-4 py-2 text-zinc-400">Robotics & computer vision startups</td>
+                <td className="px-4 py-2">Dispatches experiments to remotely connected physical edge fleet</td>
+                <td className="px-4 py-2"><span className="text-teal-400 font-medium">Ready (Worker Protocol)</span></td>
+              </tr>
+              <tr>
+                <td className="px-4 py-2 font-semibold text-teal-300">Team Workspace</td>
+                <td className="px-4 py-2 text-zinc-400">Engineering teams & labs</td>
+                <td className="px-4 py-2">Shared models, team experiment lineage, and cross-hardware comparison</td>
+                <td className="px-4 py-2"><span className="text-zinc-400">Roadmap</span></td>
+              </tr>
+              <tr>
+                <td className="px-4 py-2 font-semibold text-teal-300">Private Enterprise Lab</td>
+                <td className="px-4 py-2 text-zinc-400">Automotive, aerospace, defense</td>
+                <td className="px-4 py-2">On-premise hardware farm with air-gapped deterministic Meta agent</td>
+                <td className="px-4 py-2"><span className="text-zinc-400">Roadmap</span></td>
+              </tr>
+              <tr>
+                <td className="px-4 py-2 font-semibold text-teal-300">CI Benchmark Automation</td>
+                <td className="px-4 py-2 text-zinc-400">MLOps & platform teams</td>
+                <td className="px-4 py-2">Automated performance regression gates on GitHub Actions PRs</td>
+                <td className="px-4 py-2"><span className="text-zinc-400">Roadmap</span></td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
