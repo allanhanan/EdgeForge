@@ -7,7 +7,6 @@ import {
   Database,
   Sliders,
   FlaskConical,
-  BarChart3,
   GitCompare,
   Bot,
   Package,
@@ -15,6 +14,7 @@ import {
   Settings,
   Activity,
   Zap,
+  X,
 } from "lucide-react";
 
 export type TabType =
@@ -30,11 +30,98 @@ export type TabType =
   | "reports"
   | "settings";
 
-interface NavigationProps {
+export type WorkflowGoal =
+  | "find-hardware"
+  | "test-model"
+  | "optimize-model"
+  | "troubleshoot-deployment"
+  | "prepare-deployment"
+  | "compare-results"
+  | null;
+
+export interface WorkflowGoalItem {
+  id: NonNullable<WorkflowGoal>;
+  title: string;
+  tagline: string;
+  description: string;
+  targetTab: TabType;
+  badge: string;
+  category: string;
+  iconName: "Cpu" | "Gauge" | "Sparkles" | "Wrench" | "Package" | "GitCompare";
+}
+
+export const WORKFLOW_GOALS: WorkflowGoalItem[] = [
+  {
+    id: "find-hardware",
+    title: "Hardware Sizing",
+    tagline: "Evaluate edge silicon candidates against latency and budget constraints.",
+    description: "Compare Raspberry Pi 5 + Hailo-8, NVIDIA Jetson, and Intel NPU/CPU against latency and budget targets.",
+    targetTab: "hardware",
+    badge: "Hardware",
+    category: "Hardware",
+    iconName: "Cpu",
+  },
+  {
+    id: "test-model",
+    title: "Model Benchmarking",
+    tagline: "Profile latency, throughput, memory, and power on physical silicon.",
+    description: "Measure real-world latency (P50/P95), throughput (FPS), memory footprint, and power draw across available hardware.",
+    targetTab: "workbench",
+    badge: "Profiling",
+    category: "Benchmarking",
+    iconName: "Gauge",
+  },
+  {
+    id: "optimize-model",
+    title: "Model Optimization",
+    tagline: "Automate precision quantization and compression.",
+    description: "INT8/FP16 quantization, TensorRT optimization, and accuracy-recovery search guided by Meta AI.",
+    targetTab: "agent",
+    badge: "Optimization",
+    category: "Optimization",
+    iconName: "Sparkles",
+  },
+  {
+    id: "troubleshoot-deployment",
+    title: "Deployment Diagnostics",
+    tagline: "Debug unsupported operators, runtime crashes, and memory constraints.",
+    description: "Diagnose unsupported ONNX operators, dynamic shape mismatches, out-of-memory errors, and quantization drift.",
+    targetTab: "workbench",
+    badge: "Diagnostics",
+    category: "Troubleshooting",
+    iconName: "Wrench",
+  },
+  {
+    id: "prepare-deployment",
+    title: "Deployment Packaging",
+    tagline: "Export standalone runtime packages with verification scripts.",
+    description: "Generate a standalone deployment bundle with verified Python/C++ inference code, config, and system dependencies.",
+    targetTab: "deployments",
+    badge: "Package",
+    category: "Deployment",
+    iconName: "Package",
+  },
+  {
+    id: "compare-results",
+    title: "Benchmark Comparison",
+    tagline: "Compare multi-device runs on Pareto frontier and trade-off matrices.",
+    description: "Analyze Pareto efficiency (Latency vs Accuracy vs Power) and side-by-side metric delta tables.",
+    targetTab: "compare",
+    badge: "Comparison",
+    category: "Evaluation",
+    iconName: "GitCompare",
+  },
+];
+
+export interface NavigationProps {
   activeTab: TabType;
   setActiveTab: (tab: TabType) => void;
   metaStatus?: { mode: string; configured: boolean; model: string };
   isOnline: boolean;
+  activeGoal?: WorkflowGoal;
+  setActiveGoal?: (goal: WorkflowGoal) => void;
+  onSelectGoal?: (goal: WorkflowGoal) => void;
+  onClearGoal?: () => void;
 }
 
 interface TabItem {
@@ -49,6 +136,8 @@ export const Navigation: React.FC<NavigationProps> = ({
   setActiveTab,
   metaStatus,
   isOnline,
+  activeGoal,
+  onClearGoal,
 }) => {
   const tabs: TabItem[] = [
     { id: "dashboard", label: "Overview", icon: Activity },
@@ -64,34 +153,65 @@ export const Navigation: React.FC<NavigationProps> = ({
     { id: "settings", label: "Settings", icon: Settings },
   ];
 
+  const currentGoalConfig = activeGoal
+    ? WORKFLOW_GOALS.find((g) => g.id === activeGoal)
+    : null;
+
   return (
-    <header className="sticky top-0 z-50 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-xl">
-      <div className="flex h-14 items-center justify-between px-4 sm:px-6">
+    <header className="sticky top-0 z-50 border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur-md">
+      <div className="flex h-13 items-center justify-between px-4 sm:px-6">
         {/* Brand */}
         <div className="flex items-center gap-3">
-          <div className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-teal-500/10 border border-teal-500/30 text-teal-400 shadow-[0_0_15px_rgba(20,184,166,0.25)]">
-            <Zap className="h-4 w-4 fill-teal-400/20" />
-          </div>
-          <div>
+          <button
+            onClick={() => setActiveTab("dashboard")}
+            className="flex items-center gap-2.5 text-left group"
+          >
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-500/10 border border-teal-500/30 text-teal-400 shadow-[0_0_12px_rgba(20,184,166,0.2)] group-hover:scale-105 transition-transform">
+              <Zap className="h-3.5 w-3.5 fill-teal-400/20" />
+            </div>
             <div className="flex items-center gap-2">
-              <span className="font-bold tracking-tight text-sm text-zinc-100 font-sans">
+              <span className="font-bold tracking-tight text-sm text-zinc-100 font-sans group-hover:text-teal-300 transition-colors">
                 EdgeForge
               </span>
-              <span className="rounded-full bg-teal-500/10 border border-teal-500/25 px-2 py-0.2 text-[10px] font-mono font-medium text-teal-400">
+              <span className="rounded bg-zinc-800/80 border border-zinc-700/60 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400">
                 v1.0
               </span>
             </div>
-            <p className="text-[10px] text-zinc-400 font-mono hidden md:block">
-              Vendor-Neutral Edge AI Intelligence Engine
-            </p>
-          </div>
+          </button>
         </div>
 
         {/* Status Indicators */}
         <div className="flex items-center gap-2 sm:gap-3 text-xs font-mono">
-          {/* Lab Connected Pill */}
+          {/* Active Goal Pill (if active) */}
+          {currentGoalConfig && (
+            <div
+              onClick={() => setActiveTab(currentGoalConfig.targetTab)}
+              className="flex items-center gap-1.5 rounded-full border border-teal-500/40 bg-teal-950/60 pl-2.5 pr-1.5 py-0.5 text-teal-300 shrink-0 cursor-pointer hover:bg-teal-900/60 transition-colors"
+            >
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-teal-400" />
+              </span>
+              <span className="text-[11px] font-medium truncate max-w-[150px]">
+                {currentGoalConfig.title}
+              </span>
+              {onClearGoal && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClearGoal();
+                  }}
+                  className="p-0.5 rounded-full text-zinc-400 hover:text-white transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Lab Connected */}
           <div
-            className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-950/40 px-2.5 sm:px-3 py-1 shadow-inner shrink-0"
+            className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-950/40 px-2.5 py-1 shadow-inner shrink-0"
             title="Physical lab connected: 2 local workers active (Intel CPU + RTX 4060)"
           >
             <span className="relative flex h-2 w-2">
@@ -104,11 +224,11 @@ export const Navigation: React.FC<NavigationProps> = ({
           </div>
 
           {/* Backend Status */}
-          <div className="flex items-center gap-1.5 sm:gap-2 rounded-full border border-zinc-800/80 bg-zinc-900/60 px-2.5 sm:px-3 py-1 shadow-inner shrink-0">
+          <div
+            className="flex items-center gap-1.5 rounded-full border border-zinc-800/80 bg-zinc-900/60 px-2.5 py-1 shadow-inner shrink-0"
+            title="FastAPI profiling backend engine status"
+          >
             <span className="relative flex h-2 w-2">
-              {isOnline && (
-                <span className="animate-radar-ring absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              )}
               <span
                 className={`relative inline-flex rounded-full h-2 w-2 ${
                   isOnline ? "bg-emerald-500 shadow-[0_0_8px_#10b981]" : "bg-rose-500"
@@ -116,62 +236,47 @@ export const Navigation: React.FC<NavigationProps> = ({
               />
             </span>
             <span className="text-[11px] text-zinc-300 font-medium whitespace-nowrap">
-              <span className="hidden sm:inline">{isOnline ? "Backend Live" : "Offline"}</span>
-              <span className="sm:hidden">{isOnline ? "Live" : "Down"}</span>
+              {isOnline ? "Live" : "Offline"}
             </span>
           </div>
 
-          {/* Meta AI Provider Mode */}
-          <div className="flex items-center gap-1.5 rounded-full border border-purple-500/25 bg-purple-950/40 px-2.5 sm:px-3 py-1 shadow-inner shrink-0">
-            <Bot className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+          {/* Meta AI Provider */}
+          <div
+            className="flex items-center gap-1.5 rounded-full border border-purple-500/25 bg-purple-950/40 px-2.5 py-1 shadow-inner shrink-0"
+            title="Meta AI reasoning provider"
+          >
+            <Bot className="h-3 w-3 text-purple-400 shrink-0" />
             <span className="text-[11px] text-purple-200 font-medium whitespace-nowrap">
-              {metaStatus?.mode === "META_API_ONLINE" ? (
-                <>
-                  <span className="hidden sm:inline">Meta Muse Spark (Online)</span>
-                  <span className="sm:hidden">Meta Online</span>
-                </>
-              ) : (
-                <>
-                  <span className="hidden sm:inline">Meta AI (Offline Dev Mode)</span>
-                  <span className="sm:hidden">Meta AI</span>
-                </>
-              )}
+              {metaStatus?.mode === "META_API_ONLINE" ? "Meta Online" : "Meta AI"}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Tabs navigation with WORKSPACE header */}
-      <nav className="flex items-center gap-2 overflow-x-auto px-4 sm:px-6 py-2 border-t border-zinc-800/50 no-scrollbar bg-zinc-950/40" aria-label="Main Navigation">
-        <div className="flex items-center gap-2 px-2 py-1 text-[10px] font-mono font-bold tracking-widest uppercase text-zinc-500 shrink-0 border-r border-zinc-800/80 mr-1 hidden sm:flex">
-          WORKSPACE
-        </div>
-        <div className="flex items-center gap-1 p-1 rounded-xl bg-zinc-900/40 border border-zinc-800/60 min-w-max shrink-0" role="tablist">
+      {/* Tabs navigation */}
+      <nav className="flex items-center gap-2 overflow-x-auto px-4 sm:px-6 py-1.5 border-t border-zinc-800/50 no-scrollbar bg-zinc-950/50" aria-label="Main Navigation">
+        <div className="flex items-center gap-1 p-0.5 rounded-xl bg-zinc-900/40 border border-zinc-800/60 min-w-max shrink-0" role="tablist">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
+
             return (
               <button
                 key={tab.id}
                 id={`tab-${tab.id}`}
-                data-testid={`tab-${tab.id}`}
-                type="button"
                 role="tab"
                 aria-selected={isActive}
-                onClick={() => setActiveTab(tab.id as TabType)}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-150 whitespace-nowrap ${
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                   isActive
-                    ? "bg-zinc-800/95 text-teal-300 font-semibold shadow-sm border border-zinc-700/70"
-                    : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40 border border-transparent"
-                } ${tab.highlight && !isActive ? "text-teal-400/90 font-medium" : ""}`}
+                    ? "bg-zinc-800/90 text-zinc-100 shadow-sm border border-zinc-700/60"
+                    : tab.highlight
+                    ? "text-purple-300 hover:text-purple-100 hover:bg-purple-950/30"
+                    : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
+                }`}
               >
-                <Icon className={`h-3.5 w-3.5 ${isActive ? "text-teal-400" : "text-zinc-400"}`} />
+                <Icon className={`h-3.5 w-3.5 ${isActive ? "text-teal-400" : ""}`} />
                 <span>{tab.label}</span>
-                {tab.highlight && (
-                  <span className="ml-1 rounded px-1 py-0.2 text-[9px] font-bold font-mono bg-teal-500/20 text-teal-300 border border-teal-500/30">
-                    AI
-                  </span>
-                )}
               </button>
             );
           })}

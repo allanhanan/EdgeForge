@@ -12,10 +12,12 @@ import {
   Cpu,
   Info,
 } from "lucide-react";
-import { ModelRecord, fetchModelReport } from "@/lib/api";
+import { ModelRecord, fetchModelReport, seedSampleModel } from "@/lib/api";
 
 interface ReportsTabProps {
   models: ModelRecord[];
+  setActiveTab?: (tab: any) => void;
+  onRefresh?: () => void;
 }
 
 interface ReportData {
@@ -35,7 +37,7 @@ interface ReportData {
   }>;
 }
 
-export const ReportsTab: React.FC<ReportsTabProps> = ({ models }) => {
+export const ReportsTab: React.FC<ReportsTabProps> = ({ models, setActiveTab, onRefresh }) => {
   const [selectedModelId, setSelectedModelId] = useState<string>(
     models[0]?.id || ""
   );
@@ -204,7 +206,45 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({ models }) => {
         </div>
       )}
 
-      {loading ? (
+      {models.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-teal-500/40 bg-teal-950/20 p-8 sm:p-12 text-center space-y-4 shadow-xl animate-fadeIn">
+          <div className="mx-auto w-14 h-14 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400 shadow-md">
+            <FileText className="h-7 w-7" />
+          </div>
+          <div className="max-w-xl mx-auto space-y-1.5">
+            <h3 className="text-base sm:text-lg font-bold text-white font-sans">
+              No models available for report generation
+            </h3>
+            <p className="text-xs text-zinc-300 leading-relaxed font-sans">
+              Reports compile multi-hardware benchmarks, tail latencies (P95/P99), INT8 quantization deltas, and cryptographic reproducibility audits for your models.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await seedSampleModel();
+                  onRefresh?.();
+                } catch (err) {
+                  console.error(err);
+                }
+              }}
+              className="rounded-xl bg-gradient-to-r from-teal-500 to-emerald-400 px-5 py-2.5 text-xs font-bold text-zinc-950 hover:brightness-110 shadow-lg shadow-teal-500/20 transition-all font-sans flex items-center gap-1.5"
+            >
+              <Sparkles className="h-4 w-4 fill-zinc-950" />
+              <span>Load Sample Model (YOLOv8n)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab?.("models")}
+              className="rounded-xl border border-zinc-700 bg-zinc-800/80 hover:bg-zinc-800 px-4 py-2.5 text-xs font-semibold text-zinc-200 transition-all font-sans"
+            >
+              Upload Custom ONNX
+            </button>
+          </div>
+        </div>
+      ) : loading ? (
         <div className="rounded-2xl border border-zinc-800 p-16 text-center text-zinc-400 space-y-3 bg-zinc-950/40">
           <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-teal-500 border-t-transparent" />
           <p className="text-xs font-mono">Compiling benchmark audit logs and generating report...</p>

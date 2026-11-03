@@ -75,15 +75,26 @@ def main():
         w = first_input.shape[3] if isinstance(first_input.shape[3], int) and first_input.shape[3] > 0 else 640
         input_shape = [1, 3, h, w]
 
-    if args.image and Path(args.image).exists():
-        inp_tensor, scale, pad, orig_size = preprocess(args.image, (input_shape[3], input_shape[2]), dtype=dtype)
-        print(f"[*] Running inference on {{args.image}}...")
-        t0 = time.perf_counter()
-        outputs = session.run(None, {{input_name: inp_tensor}})
-        t1 = time.perf_counter()
-        latency_ms = (t1 - t0) * 1000.0
-        print(f"[+] Output tensor shape: {{outputs[0].shape}}")
-        print(f"[+] Latency: {{latency_ms:.2f}} ms ({{1000.0/latency_ms:.1f}} FPS)")
+    if args.image:
+        img_p = Path(args.image)
+        if img_p.exists():
+            inp_tensor, scale, pad, orig_size = preprocess(str(img_p), (input_shape[3], input_shape[2]), dtype=dtype)
+            print(f"[*] Running inference on {{args.image}}...")
+            t0 = time.perf_counter()
+            outputs = session.run(None, {{input_name: inp_tensor}})
+            t1 = time.perf_counter()
+            latency_ms = (t1 - t0) * 1000.0
+            print(f"[+] Output tensor shape: {{outputs[0].shape}}")
+            print(f"[+] Latency: {{latency_ms:.2f}} ms ({{1000.0/latency_ms:.1f}} FPS)")
+        else:
+            print(f"[!] Warning: Specified image '{{args.image}}' not found. Falling back to synthetic dummy input.")
+            dummy_input = np.random.randn(*input_shape).astype(dtype)
+            t0 = time.perf_counter()
+            outputs = session.run(None, {{input_name: dummy_input}})
+            t1 = time.perf_counter()
+            latency_ms = (t1 - t0) * 1000.0
+            print(f"[+] Output tensor shape: {{outputs[0].shape}}")
+            print(f"[+] Latency: {{latency_ms:.2f}} ms ({{1000.0/latency_ms:.1f}} FPS)")
     else:
         print(f"[*] Running synthetic benchmark with shape {{input_shape}} and dtype {{dtype}}...")
         dummy_input = np.random.randn(*input_shape).astype(dtype)
@@ -236,7 +247,35 @@ python infer.py --image path/to/frame.jpg
     with open(export_dir / "README.md", "w") as f:
         f.write(readme_text)
 
-    # 8. Generate checksums.sha256
+    # 8. Generate manifest.json (reproducibility audit trail and bundle manifest with artifact checksums)
+    checksums_map = {}
+    for fname in ["model.onnx", "infer.py", "requirements.txt", "config.json", "benchmark_summary.json", "README.md"]:
+        fpath = export_dir / fname
+        if fpath.exists():
+            checksums_map[fname] = calculate_sha256(fpath)
+
+    manifest_info = {
+        "bundle_id": bundle_id,
+        "model_id": model_record.get("id"),
+        "model_name": model_record.get("name"),
+        "model_sha256": calculate_sha256(dest_model_path),
+        "target_hardware": device_record.get("name"),
+        "hardware_id": run_record.get("hardware_id"),
+        "precision": precision,
+        "runtime": run_record.get("runtime"),
+        "verified_fps": run_record.get("fps"),
+        "verified_latency_ms": run_record.get("median_latency_ms"),
+        "checksums": checksums_map,
+        "audit_trail": {
+            "reproducibility": run_record.get("reproducibility_metadata", {}),
+            "generated_at": time.strftime("%Y-%m-%d %H:%M:%S UTC"),
+            "format_version": "1.0.0"
+        }
+    }
+    with open(export_dir / "manifest.json", "w") as f:
+        json.dump(manifest_info, f, indent=2)
+
+    # 9. Generate checksums.sha256
     checksum_lines = []
     for file in sorted(export_dir.iterdir()):
         if file.is_file() and file.name != "checksums.sha256":

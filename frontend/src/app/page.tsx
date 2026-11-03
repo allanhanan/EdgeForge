@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Navigation, TabType } from "@/components/Navigation";
+import { Navigation, TabType, WorkflowGoal, WORKFLOW_GOALS } from "@/components/Navigation";
 import { DashboardTab } from "@/components/DashboardTab";
 import { ModelsTab } from "@/components/ModelsTab";
 import { DatasetsTab } from "@/components/DatasetsTab";
@@ -32,6 +32,7 @@ import {
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
+  const [activeGoal, setActiveGoal] = useState<WorkflowGoal>(null);
   const [isOnline, setIsOnline] = useState(false);
   const [metaStatus, setMetaStatus] = useState<MetaStatus | undefined>(undefined);
 
@@ -45,6 +46,25 @@ export default function Home() {
   const [preselectedModelId, setPreselectedModelId] = useState<string | null>(null);
   const [preselectedDatasetId, setPreselectedDatasetId] = useState<string | null>(null);
   const [preselectedRunId, setPreselectedRunId] = useState<string | null>(null);
+  const [agentInitialQuery, setAgentInitialQuery] = useState<string | null>(null);
+
+  const handleSelectGoal = (goal: WorkflowGoal) => {
+    setActiveGoal(goal);
+    if (!goal) return;
+    const target = WORKFLOW_GOALS.find((g) => g.id === goal);
+    if (target) {
+      setActiveTab(target.targetTab);
+    }
+  };
+
+  const handleClearGoal = () => {
+    setActiveGoal(null);
+  };
+
+  const handleAskAI = (query: string) => {
+    setAgentInitialQuery(`${query}__${Date.now()}`);
+    setActiveTab("agent");
+  };
 
   const loadData = useCallback(async () => {
     try {
@@ -103,6 +123,10 @@ export default function Home() {
         setActiveTab={setActiveTab}
         metaStatus={metaStatus}
         isOnline={isOnline}
+        activeGoal={activeGoal}
+        setActiveGoal={setActiveGoal}
+        onSelectGoal={handleSelectGoal}
+        onClearGoal={handleClearGoal}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
@@ -114,6 +138,10 @@ export default function Home() {
             runs={runs}
             setActiveTab={setActiveTab}
             onQuickBenchmark={() => setActiveTab("workbench")}
+            activeGoal={activeGoal}
+            onSelectGoal={handleSelectGoal}
+            onClearGoal={handleClearGoal}
+            onRefreshData={loadData}
           />
         )}
 
@@ -137,6 +165,10 @@ export default function Home() {
           <HardwareLabTab
             hardware={hardware}
             onRefresh={loadData}
+            activeGoal={activeGoal}
+            onClearGoal={handleClearGoal}
+            setActiveTab={setActiveTab}
+            onSelectGoal={handleSelectGoal}
           />
         )}
 
@@ -149,6 +181,10 @@ export default function Home() {
             initialDatasetId={preselectedDatasetId}
             onBenchmarkComplete={loadData}
             setActiveTab={setActiveTab}
+            activeGoal={activeGoal}
+            onClearGoal={handleClearGoal}
+            onAskAI={handleAskAI}
+            onRefresh={loadData}
           />
         )}
 
@@ -171,15 +207,25 @@ export default function Home() {
             hardware={hardware}
             preselectedRunId={preselectedRunId}
             setActiveTab={setActiveTab}
+            onAskAI={handleAskAI}
+            activeGoal={activeGoal}
+            onClearGoal={handleClearGoal}
+            onSelectGoal={handleSelectGoal}
           />
         )}
 
         {activeTab === "agent" && (
           <AIEngineerTab
             models={models}
+            hardware={hardware}
+            datasets={datasets}
+            runs={runs}
             metaStatus={metaStatus}
             onRefreshRuns={loadData}
             setActiveTab={setActiveTab}
+            initialQuery={agentInitialQuery}
+            activeGoal={activeGoal}
+            onClearGoal={handleClearGoal}
           />
         )}
 
@@ -188,12 +234,19 @@ export default function Home() {
             models={models}
             runs={runs}
             hardware={hardware}
+            activeGoal={activeGoal}
+            onClearGoal={handleClearGoal}
+            onRefresh={loadData}
+            setActiveTab={setActiveTab}
+            onSelectGoal={handleSelectGoal}
           />
         )}
 
         {activeTab === "reports" && (
           <ReportsTab
             models={models}
+            setActiveTab={setActiveTab}
+            onRefresh={loadData}
           />
         )}
 

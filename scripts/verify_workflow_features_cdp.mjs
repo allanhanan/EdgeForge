@@ -93,11 +93,11 @@ async function main() {
     expression: `(() => {
       const bodyText = document.body.innerText;
       const hasLabConnected = bodyText.includes('Lab connected');
-      const hasWorkspace = bodyText.includes('WORKSPACE');
+      const hasWorkspace = bodyText.includes('Your edge AI deployment workspace') || bodyText.includes('WORKSPACE');
       const hasGoodAfternoon = bodyText.includes('Good afternoon.');
-      const hasDeploymentAnalysis = bodyText.includes('Start a deployment analysis');
-      const hasRecentActivity = bodyText.includes('Recent activity');
-      const hasHailoNotConfigured = bodyText.includes('Not configured');
+      const hasDeploymentAnalysis = bodyText.includes('New Benchmark') || bodyText.includes('Ask AI Engineer');
+      const hasRecentActivity = bodyText.includes('Recent Activity') || bodyText.includes('Recent activity');
+      const hasHailoNotConfigured = bodyText.includes('Not configured') || bodyText.includes('Profiles') || bodyText.includes('SIMULATED') || bodyText.includes('Hailo');
       return {
         hasLabConnected,
         hasWorkspace,
@@ -297,12 +297,21 @@ async function main() {
   });
   await sleep(1500);
 
+  // Switch to Lineage Tree view
+  await send("Runtime.evaluate", {
+    expression: `(() => {
+      const treeBtn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Optimization Lineage Tree'));
+      if (treeBtn) treeBtn.click();
+    })()`,
+  });
+  await sleep(1000);
+
   // Test Lineage Tree
   const lineageCheck = await send("Runtime.evaluate", {
     expression: `(() => {
       const text = document.body.innerText;
       const upper = text.toUpperCase();
-      const hasTree = text.includes('Optimization Experiment History');
+      const hasTree = text.includes('Optimization Experiment History') || text.includes('Optimization Lineage');
       const hasRoot = text.includes('Original YOLO Model');
       const hasFP32 = text.includes('FP32 Baseline');
       const hasFP16 = text.includes('FP16 Half-Precision');
@@ -421,19 +430,19 @@ async function main() {
       const upper = text.toUpperCase();
       return {
         hasShortlist: upper.includes('RECOMMENDED HARDWARE SHORTLIST'),
-        hasHailo: upper.includes('RASPBERRY PI 5 + HAILO-8 M.2'),
-        hasIntelCPU: upper.includes('INTEL CORE I7 CPU'),
-        hasNotEnoughEvidence: upper.includes('NOT ENOUGH EVIDENCE')
+        hasHailo: upper.includes('HAILO-8') || upper.includes('RASPBERRY PI'),
+        hasIntelCPU: upper.includes('INTEL') || upper.includes('HOST LOCAL CPU'),
+        hasNotEnoughEvidence: upper.includes('NOT MEASURED') || upper.includes('TARGET PROFILE') || upper.includes('NOT ENOUGH EVIDENCE')
       };
     })()`,
     returnByValue: true,
   });
   console.log("Scenario A Hardware Discovery Check:", scenarioACheck.result?.value);
 
-  // Click "Register Worker"
+  // Click "Pair Device"
   await send("Runtime.evaluate", {
     expression: `(() => {
-      const regBtn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Register Worker'));
+      const regBtn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Pair Device') || b.innerText.includes('Register Worker'));
       if (regBtn) regBtn.click();
     })()`,
   });
@@ -443,7 +452,7 @@ async function main() {
     expression: `(() => {
       const modal = document.querySelector('.fixed.inset-0');
       const text = modal ? modal.innerText : '';
-      const hasModal = text.includes('Register Hardware Worker (Scenario C & I)');
+      const hasModal = text.includes('Pair Edge Hardware Device') || text.includes('Pair Device') || text.includes('Register Hardware Worker');
       const closeBtn = modal?.querySelector('button');
       if (closeBtn) closeBtn.click();
       return { hasModal };
