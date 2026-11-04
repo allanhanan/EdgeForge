@@ -1,21 +1,23 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Layers,
   Upload,
-  Sparkles,
+  Download,
   Trash2,
   Sliders,
   CheckCircle2,
   FileCode,
-  Info,
-  ChevronRight,
-  ChevronDown,
   X,
   Cpu,
-  HelpCircle,
   ArrowRight,
+  Search,
+  Copy,
+  Check,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import {
   ModelRecord,
@@ -30,6 +32,7 @@ interface ModelsTabProps {
   models: ModelRecord[];
   onRefresh: () => void;
   onSelectForBenchmark: (modelId: string) => void;
+  initialModelId?: string | null;
 }
 
 interface DeviceFinding {
@@ -53,16 +56,74 @@ interface CompatibilityMatrixData {
   device_evaluations?: DeviceEvaluation[];
 }
 
+// Robust cross-browser clipboard copy
+const copyToClipboard = async (text: string): Promise<boolean> => {
+  try {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // fallback below
+  }
+  try {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.left = "-999999px";
+    textArea.style.top = "-999999px";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    const successful = document.execCommand("copy");
+    textArea.remove();
+    return successful;
+  } catch (err) {
+    console.warn("Clipboard copy failed", err);
+    return false;
+  }
+};
+
+const CopySnippet: React.FC<{ text: string }> = ({ text }) => {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const ok = await copyToClipboard(text);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="p-1 text-[#8e8e9e] hover:text-[#ccccdc] transition-colors shrink-0"
+      title="Copy to clipboard"
+    >
+      {copied ? <Check className="h-3.5 w-3.5 text-[#73bf69]" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
+  );
+};
+
 export const ModelsTab: React.FC<ModelsTabProps> = ({
   models,
   onRefresh,
   onSelectForBenchmark,
+  initialModelId,
 }) => {
-  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
-  const [techDrawerOpen, setTechDrawerOpen] = useState(false);
-
-  const selectedModel =
-    models.find((m) => m.id === selectedModelId) || models[0] || null;
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(initialModelId || null);
+  const [prevInitialId, setPrevInitialId] = useState(initialModelId);
+  if (initialModelId !== prevInitialId) {
+    setPrevInitialId(initialModelId);
+    if (initialModelId) {
+      setSelectedModelId(initialModelId);
+    }
+  }
+  const [drawerCollapsed, setDrawerCollapsed] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [formatFilter, setFormatFilter] = useState("ALL");
+  const [taskFilter, setTaskFilter] = useState("ALL");
 
   const [isUploading, setIsUploading] = useState(false);
   const [isQuantizing, setIsQuantizing] = useState(false);
@@ -74,6 +135,84 @@ export const ModelsTab: React.FC<ModelsTabProps> = ({
   const [compatModalOpen, setCompatModalOpen] = useState(false);
   const [compatData, setCompatData] = useState<CompatibilityMatrixData | null>(null);
   const [isCheckingCompat, setIsCheckingCompat] = useState(false);
+
+  // Helper to extract clean spatial resolution
+  const getInputResolution = (model: ModelRecord): string => {
+    if (Array.isArray(model.input_shapes) && model.input_shapes.length > 0) {
+      const shape = model.input_shapes[0]?.shape;
+      if (Array.isArray(shape) && shape.length >= 2) {
+        let h: unknown;
+        let w: unknown;
+        if (shape.length === 4) {
+          const lastDim = Number(shape[3]);
+          if ((lastDim === 1 || lastDim === 3 || lastDim === 4) && isNaN(Number(shape[1]))) {
+            h = shape[1];
+            w = shape[2];
+          } else {
+            h = shape[2];
+            w = shape[3];
+          }
+        } else {
+          h = shape[shape.length - 2];
+          w = shape[shape.length - 1];
+        }
+
+        if (h != null && w != null && !isNaN(Number(h)) && !isNaN(Number(w)) && Number(h) > 0 && Number(w) > 0) {
+          return `${h} × ${w}`;
+        }
+        if (typeof h === "string" && typeof w === "string" && h.trim() && w.trim()) {
+          return `${h} × ${w}`;
+        }
+      }
+    }
+    return "640 × 640";
+  };
+
+  const getFriendlyTaskName = (taskType?: string): string => {
+    if (!taskType) return "Detection";
+    const normalized = taskType.toLowerCase().replace(/_/g, " ");
+    if (normalized.includes("detect")) return "Detection";
+    if (normalized.includes("class")) return "Classification";
+    if (normalized.includes("seg")) return "Segmentation";
+    return taskType;
+  };
+
+  const formatShapeString = (shape: (number | string)[]): string => {
+    if (!Array.isArray(shape)) return "[-]";
+    return `[${shape.join(", ")}]`;
+  };
+
+  // Filtered models
+  const filteredModels = useMemo(() => {
+    return models.filter((m) => {
+      if (formatFilter !== "ALL" && m.format.toLowerCase() !== formatFilter.toLowerCase()) {
+        return false;
+      }
+      if (taskFilter !== "ALL") {
+        const friendly = getFriendlyTaskName(m.task_type).toLowerCase();
+        if (!friendly.includes(taskFilter.toLowerCase())) {
+          return false;
+        }
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const nameMatch = m.name.toLowerCase().includes(q);
+        const fileMatch = m.filename.toLowerCase().includes(q);
+        const taskMatch = (m.task_type || "").toLowerCase().includes(q);
+        const formatMatch = (m.format || "").toLowerCase().includes(q);
+        return nameMatch || fileMatch || taskMatch || formatMatch;
+      }
+      return true;
+    });
+  }, [models, formatFilter, taskFilter, searchQuery]);
+
+  const selectedModel = useMemo(() => {
+    if (selectedModelId) {
+      const found = filteredModels.find((m) => m.id === selectedModelId);
+      if (found) return found;
+    }
+    return filteredModels[0] || null;
+  }, [filteredModels, selectedModelId]);
 
   const handleCheckCompatibility = async (modelId: string) => {
     setIsCheckingCompat(true);
@@ -102,6 +241,7 @@ export const ModelsTab: React.FC<ModelsTabProps> = ({
       onRefresh();
       if (uploaded?.id) {
         setSelectedModelId(uploaded.id);
+        setDrawerCollapsed(false);
       }
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "Failed to upload model");
@@ -119,6 +259,7 @@ export const ModelsTab: React.FC<ModelsTabProps> = ({
       onRefresh();
       if (seeded?.id) {
         setSelectedModelId(seeded.id);
+        setDrawerCollapsed(false);
       }
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "Failed to seed sample model");
@@ -152,6 +293,7 @@ export const ModelsTab: React.FC<ModelsTabProps> = ({
       onRefresh();
       if (opt?.id) {
         setSelectedModelId(opt.id);
+        setDrawerCollapsed(false);
       }
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "Quantization failed");
@@ -160,81 +302,79 @@ export const ModelsTab: React.FC<ModelsTabProps> = ({
     }
   };
 
-  // Helper to extract clean spatial resolution for natural language summaries
-  const getInputResolution = (model: ModelRecord): string => {
-    if (Array.isArray(model.input_shapes) && model.input_shapes.length > 0) {
-      const shape = model.input_shapes[0]?.shape;
-      if (Array.isArray(shape) && shape.length >= 2) {
-        let h: unknown;
-        let w: unknown;
-        if (shape.length === 4) {
-          const lastDim = Number(shape[3]);
-          if ((lastDim === 1 || lastDim === 3 || lastDim === 4) && isNaN(Number(shape[1]))) {
-            h = shape[1];
-            w = shape[2];
-          } else {
-            h = shape[2];
-            w = shape[3];
-          }
-        } else {
-          h = shape[shape.length - 2];
-          w = shape[shape.length - 1];
-        }
-
-        if (h != null && w != null && !isNaN(Number(h)) && !isNaN(Number(w)) && Number(h) > 0 && Number(w) > 0) {
-          return `${h} × ${w}`;
-        }
-        if (typeof h === "string" && typeof w === "string" && h.trim() && w.trim()) {
-          return `${h} × ${w}`;
-        }
-      }
-    }
-    return "640 × 640";
-  };
-
-  const getFriendlyTaskName = (taskType?: string): string => {
-    if (!taskType) return "object detection";
-    const normalized = taskType.toLowerCase().replace(/_/g, " ");
-    if (normalized.includes("detect")) return "object detection";
-    if (normalized.includes("class")) return "image classification";
-    if (normalized.includes("seg")) return "image segmentation";
-    return normalized;
-  };
-
-  const selectedResolution = selectedModel ? getInputResolution(selectedModel) : "640 × 640";
-  const selectedTaskName = selectedModel ? getFriendlyTaskName(selectedModel.task_type) : "object detection";
-  const selectedArticle = /^[aeiou]/i.test(selectedTaskName) ? "an" : "a";
-  const selectedSizeMb = selectedModel
-    ? (selectedModel.file_size_bytes / (1024 * 1024)).toFixed(2)
-    : "0";
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-zinc-100 flex items-center gap-2 font-sans">
-            <Layers className="h-5 w-5 text-teal-400" />
-            Model Registry & Automatic Inspection
-          </h2>
-          <p className="text-xs text-zinc-400 font-mono mt-0.5">
-            Automatic input shape detection, operator graph profiling, and edge deployment readiness.
-          </p>
+    <div className="space-y-4">
+      {/* Top Action Bar - Grafana Panel Toolbar Style */}
+      <div className="bg-[#181b1f] border border-[#2c3235] rounded-sm p-3 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+        {/* Left: Search & Filters */}
+        <div className="flex flex-wrap items-center gap-2 flex-1">
+          {/* Search Input */}
+          <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
+            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-[#8e8e9e]" />
+            <input
+              type="text"
+              placeholder="Search model inventory..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-[#111217] border border-[#2c3235] rounded-sm pl-8 pr-3 py-1.5 text-xs text-[#ccccdc] placeholder-[#8e8e9e] focus:outline-none focus:border-[#5794f2] font-sans"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-2 text-[#8e8e9e] hover:text-[#ccccdc]"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+
+          {/* Format Filter */}
+          <div className="flex items-center gap-1.5 bg-[#111217] border border-[#2c3235] rounded-sm px-2.5 py-1 text-xs font-sans">
+            <span className="text-[#8e8e9e] font-medium text-xs">Format:</span>
+            <select
+              value={formatFilter}
+              onChange={(e) => setFormatFilter(e.target.value)}
+              className="bg-transparent text-[#ccccdc] text-xs focus:outline-none cursor-pointer font-sans"
+            >
+              <option value="ALL" className="bg-[#181b1f]">All Formats</option>
+              <option value="ONNX" className="bg-[#181b1f]">ONNX</option>
+              <option value="TensorRT" className="bg-[#181b1f]">TensorRT</option>
+              <option value="OpenVINO" className="bg-[#181b1f]">OpenVINO</option>
+              <option value="Hailo" className="bg-[#181b1f]">Hailo</option>
+            </select>
+          </div>
+
+          {/* Task Filter */}
+          <div className="flex items-center gap-1.5 bg-[#111217] border border-[#2c3235] rounded-sm px-2.5 py-1 text-xs font-sans">
+            <span className="text-[#8e8e9e] font-medium text-xs">Task:</span>
+            <select
+              value={taskFilter}
+              onChange={(e) => setTaskFilter(e.target.value)}
+              className="bg-transparent text-[#ccccdc] text-xs focus:outline-none cursor-pointer font-sans"
+            >
+              <option value="ALL" className="bg-[#181b1f]">All Tasks</option>
+              <option value="Detection" className="bg-[#181b1f]">Detection</option>
+              <option value="Classification" className="bg-[#181b1f]">Classification</option>
+              <option value="Segmentation" className="bg-[#181b1f]">Segmentation</option>
+            </select>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        {/* Right: Actions */}
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={handleSeed}
             disabled={isUploading}
-            className="flex items-center gap-1.5 rounded-xl border border-teal-500/30 bg-teal-500/10 px-3.5 py-2 text-xs font-semibold text-teal-300 hover:bg-teal-500/20 transition-all duration-150 disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-sm border border-[#2c3235] bg-[#22252b] hover:bg-[#2c3235] px-3 py-1.5 text-xs font-sans font-medium text-[#ccccdc] transition-colors disabled:opacity-50"
+            title="Register reference YOLOv8n sample model"
           >
-            <Sparkles className="h-3.5 w-3.5" />
-            Seed Sample YOLO
+            <Download className="h-3.5 w-3.5 text-[#5794f2]" />
+            <span>{isUploading ? "Registering..." : "Seed Sample Model"}</span>
           </button>
 
-          <label className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-400 px-4 py-2 text-xs font-bold text-zinc-950 hover:brightness-110 cursor-pointer shadow-md shadow-teal-500/20 transition-all duration-150">
-            <Upload className="h-3.5 w-3.5 fill-zinc-950" />
-            Upload ONNX
+          <label className="flex items-center gap-1.5 rounded-sm bg-[#5794f2] hover:bg-[#3274d9] px-3 py-1.5 text-xs font-sans font-semibold text-[#111217] cursor-pointer transition-colors">
+            <Upload className="h-3.5 w-3.5" />
+            <span>Upload ONNX</span>
             <input
               type="file"
               accept=".onnx"
@@ -246,443 +386,571 @@ export const ModelsTab: React.FC<ModelsTabProps> = ({
         </div>
       </div>
 
+      {/* Error Banner */}
       {errorMsg && (
-        <div className="rounded-xl border border-red-500/30 bg-red-950/40 p-4 text-xs text-red-300 font-mono flex items-center justify-between">
-          <span>{errorMsg}</span>
-          <button onClick={() => setErrorMsg(null)} className="text-zinc-400 hover:text-zinc-200">
-            &times;
+        <div className="rounded-sm border border-[#f2495c]/40 bg-[#f2495c]/10 p-3 text-xs text-[#f2495c] font-sans flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+          <button onClick={() => setErrorMsg(null)} className="text-[#8e8e9e] hover:text-[#ccccdc]">
+            <X className="h-4 w-4" />
           </button>
         </div>
       )}
 
-      {/* Models Grid & Detail View */}
-      {models.length === 0 ? (
-        /* Clean Professional Empty State */
-        <div className="rounded-2xl border border-dashed border-zinc-800/90 bg-zinc-950/40 p-8 sm:p-12 text-center space-y-6">
-          <div className="mx-auto w-14 h-14 rounded-2xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400">
-            <Layers className="h-7 w-7" />
+      {/* PRIMARY VIEW: Model Inventory Data Table */}
+      <div className="bg-[#181b1f] border border-[#2c3235] rounded-sm overflow-hidden">
+        {/* Table Panel Header */}
+        <div className="bg-[#1f2328] px-4 py-2.5 border-b border-[#2c3235] flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Layers className="h-4 w-4 text-[#5794f2]" />
+            <span className="font-sans font-semibold text-xs text-white">
+              Model Inventory &amp; Graph Registry
+            </span>
+            <span className="font-sans text-xs text-[#8e8e9e]">
+              ({filteredModels.length} {filteredModels.length === 1 ? "model" : "models"})
+            </span>
           </div>
-
-          <div className="space-y-1.5 max-w-md mx-auto">
-            <h3 className="text-base font-bold text-zinc-100">
-              No models registered
-            </h3>
-            <p className="text-xs text-zinc-400">
-              Upload an ONNX model file or register the reference YOLOv8n model to begin profiling.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <button
-              onClick={handleSeed}
-              disabled={isUploading}
-              className="flex items-center gap-1.5 rounded-xl border border-teal-500/30 bg-teal-500/10 px-4 py-2.5 text-xs font-semibold text-teal-300 hover:bg-teal-500/20 transition-all disabled:opacity-50"
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              <span>{isUploading ? "Registering..." : "Register Sample YOLOv8n"}</span>
-            </button>
-
-            <label className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-400 px-4 py-2.5 text-xs font-bold text-zinc-950 hover:brightness-110 cursor-pointer shadow-md shadow-teal-500/20 transition-all">
-              <Upload className="h-3.5 w-3.5 fill-zinc-950" />
-              Upload ONNX
-              <input
-                type="file"
-                accept=".onnx"
-                onChange={handleFileUpload}
-                className="hidden"
-                disabled={isUploading}
-              />
-            </label>
-          </div>
+          <span className="font-sans text-xs text-[#8e8e9e] hidden sm:inline">
+            Select row to inspect tensor shapes and operator breakdown
+          </span>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left: Model List (5 cols) */}
-          <div className="lg:col-span-5 space-y-3">
-            <div className="flex items-center justify-between text-xs text-zinc-400 font-mono pb-1">
-              <span className="font-semibold uppercase tracking-wider text-[11px]">
-                Registered Models ({models.length})
-              </span>
-              <span className="text-[10px] text-zinc-500">Click to inspect</span>
-            </div>
 
-            {models.map((model) => {
-              const isSelected = selectedModel?.id === model.id;
-              const sizeMb = (model.file_size_bytes / (1024 * 1024)).toFixed(2);
-              const resolution = getInputResolution(model);
-              const friendlyTask = getFriendlyTaskName(model.task_type);
-
-              return (
-                <div
-                  key={model.id}
-                  onClick={() => setSelectedModelId(model.id)}
-                  className={`rounded-2xl p-4 sm:p-5 transition-all duration-200 cursor-pointer ${
-                    isSelected
-                      ? "border border-teal-500/80 bg-teal-950/20 shadow-lg shadow-teal-500/10 ring-1 ring-teal-500/40"
-                      : "glass-card hover:border-zinc-700/80"
-                  }`}
+        {/* Data Table */}
+        {filteredModels.length === 0 ? (
+          <div className="p-8 text-center text-[#8e8e9e] space-y-3 font-sans text-xs">
+            <p>No models found matching criteria.</p>
+            <div className="flex justify-center gap-2">
+              <button
+                onClick={handleSeed}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#22252b] border border-[#2c3235] rounded-sm text-[#ccccdc] hover:bg-[#2c3235] font-sans"
+              >
+                <Download className="h-3.5 w-3.5 text-[#5794f2]" />
+                <span>Seed Reference Sample</span>
+              </button>
+              {(searchQuery || formatFilter !== "ALL" || taskFilter !== "ALL") && (
+                <button
+                  onClick={() => {
+                    setSearchQuery("");
+                    setFormatFilter("ALL");
+                    setTaskFilter("ALL");
+                  }}
+                  className="px-3 py-1.5 bg-[#22252b] border border-[#2c3235] rounded-sm text-[#8e8e9e] hover:text-[#ccccdc] font-sans"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-zinc-100 text-sm font-sans">
-                          {model.name}
-                        </span>
-                        <span className="rounded-md bg-teal-500/10 border border-teal-500/30 px-2 py-0.5 text-[10px] font-mono text-teal-300 uppercase font-semibold">
+                  Clear Filters
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-[#ccccdc] border-collapse font-sans">
+              <thead>
+                <tr className="bg-[#141619] border-b border-[#2c3235] text-xs font-sans text-[#8e8e9e]">
+                  <th className="py-2.5 px-3 font-sans font-semibold text-xs text-white">Model Name</th>
+                  <th className="py-2.5 px-3 font-sans font-semibold text-xs text-[#ccccdc]">Format</th>
+                  <th className="py-2.5 px-3 font-sans font-semibold text-xs text-[#ccccdc]">Opset</th>
+                  <th className="py-2.5 px-3 font-sans font-semibold text-xs text-[#ccccdc]">Task</th>
+                  <th className="py-2.5 px-3 font-sans font-semibold text-xs text-[#ccccdc]">Input Tensor Shape</th>
+                  <th className="py-2.5 px-3 font-sans font-semibold text-xs text-[#ccccdc]">File Size</th>
+                  <th className="py-2.5 px-3 font-sans font-semibold text-xs text-[#ccccdc]">Node Count</th>
+                  <th className="py-2.5 px-3 font-sans font-semibold text-xs text-[#ccccdc]">Status</th>
+                  <th className="py-2.5 px-3 font-sans font-semibold text-xs text-[#ccccdc] text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#2c3235]/60">
+                {filteredModels.map((model) => {
+                  const isSelected = selectedModel?.id === model.id;
+                  const sizeMb = (model.file_size_bytes / (1024 * 1024)).toFixed(2);
+                  const firstInput = model.input_shapes?.[0];
+                  const shapeStr = firstInput ? formatShapeString(firstInput.shape) : getInputResolution(model);
+                  const taskFriendly = getFriendlyTaskName(model.task_type);
+
+                  return (
+                    <tr
+                      key={model.id}
+                      onClick={() => {
+                        setSelectedModelId(model.id);
+                        setDrawerCollapsed(false);
+                      }}
+                      className={`cursor-pointer transition-colors ${
+                        isSelected
+                          ? "bg-[#262c36] border-l-2 border-[#5794f2]"
+                          : "hover:bg-[#20232a]"
+                      }`}
+                    >
+                      {/* Name */}
+                      <td className="py-2.5 px-3">
+                        <div className="flex items-center gap-2">
+                          <span className="font-sans font-medium text-white hover:text-[#5794f2] transition-colors">
+                            {model.name}
+                          </span>
+                          <span className="font-mono text-[11px] text-[#8e8e9e] hidden sm:inline">
+                            ({model.id.length > 16 ? `${model.id.substring(0, 16)}...` : model.id})
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Format */}
+                      <td className="py-2.5 px-3">
+                        <span className="rounded-sm bg-[#22252b] border border-[#2c3235] px-1.5 py-0.5 text-[10px] font-sans uppercase text-[#5794f2] font-semibold">
                           {model.format}
                         </span>
-                      </div>
-                      <div className="text-xs text-zinc-400 font-mono flex items-center gap-2.5 flex-wrap">
-                        <span className="text-zinc-300 font-semibold">{sizeMb} MB</span>
-                        <span>•</span>
-                        <span className="text-teal-400/90 capitalize">{friendlyTask}</span>
-                        <span>•</span>
-                        <span className="text-zinc-400">{resolution}</span>
-                      </div>
-                    </div>
+                      </td>
 
-                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => onSelectForBenchmark(model.id)}
-                        className="rounded-lg border border-teal-500/40 bg-teal-500/10 px-2.5 py-1.5 text-xs font-semibold text-teal-300 hover:bg-teal-500/20 transition-all"
-                        title="Proceed to hardware selection and benchmarking"
-                      >
-                        Test Model
-                      </button>
-                      <button
-                        onClick={() => {
-                          setActiveModelForQuant(model);
-                          setQuantModalOpen(true);
-                        }}
-                        className="rounded-lg border border-zinc-700/80 bg-zinc-800/80 px-2.5 py-1.5 text-xs font-semibold text-zinc-300 hover:bg-zinc-700 hover:text-white transition-all"
-                        title="Compress model to INT8 precision"
-                      >
-                        Quantize
-                      </button>
-                      <button
-                        onClick={() => handleDelete(model.id)}
-                        className="rounded-lg p-1.5 text-zinc-500 hover:text-rose-400 hover:bg-rose-950/30 transition-all"
-                        aria-label="Delete model"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
+                      {/* Opset (Monospace strictly for opset number) */}
+                      <td className="py-2.5 px-3 font-sans text-[#8e8e9e]">
+                        Opset <span className="font-mono text-white font-medium">{model.opset_version || 17}</span>
+                      </td>
 
-                  {/* Clean Human-Friendly Card Footer */}
-                  <div className="mt-3 pt-2.5 border-t border-zinc-800/70 flex items-center justify-between text-[11px] font-mono text-zinc-400">
-                    <span className="text-zinc-500">
-                      Verified Graph • {model.node_count} nodes • Opset {model.opset_version || 17}
-                    </span>
-                    {isSelected && (
-                      <span className="text-teal-400 font-semibold flex items-center gap-1">
-                        <CheckCircle2 className="h-3 w-3" /> Inspected
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                      {/* Task */}
+                      <td className="py-2.5 px-3 font-sans text-[#ccccdc] capitalize">
+                        {taskFriendly}
+                      </td>
+
+                      {/* Input Tensor Shape (Monospace strictly for tensor shapes) */}
+                      <td className="py-2.5 px-3">
+                        <code className="font-mono text-xs text-[#5794f2] bg-[#111217] px-1.5 py-0.5 rounded-sm border border-[#2c3235]/60">
+                          {shapeStr}
+                        </code>
+                      </td>
+
+                      {/* File Size */}
+                      <td className="py-2.5 px-3 font-sans text-[#ccccdc]">
+                        {sizeMb} MB
+                      </td>
+
+                      {/* Node Count */}
+                      <td className="py-2.5 px-3 font-sans text-[#8e8e9e]">
+                        <span className="font-mono text-white font-medium">{model.node_count}</span> ops
+                      </td>
+
+                      {/* Status */}
+                      <td className="py-2.5 px-3">
+                        <span className="inline-flex items-center gap-1 rounded-sm bg-[#73bf69]/10 border border-[#73bf69]/30 px-1.5 py-0.5 text-[10px] font-sans text-[#73bf69] font-medium">
+                          <CheckCircle2 className="h-3 w-3" />
+                          Verified / Ready
+                        </span>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-2.5 px-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => {
+                              setSelectedModelId(model.id);
+                              setDrawerCollapsed(false);
+                            }}
+                            className="rounded-sm border border-[#2c3235] bg-[#22252b] hover:bg-[#2c3235] px-2 py-1 text-[11px] font-sans text-[#ccccdc] transition-colors"
+                            title="Inspect tensor and operator breakdown"
+                          >
+                            Inspect
+                          </button>
+
+                          <button
+                            onClick={() => onSelectForBenchmark(model.id)}
+                            className="rounded-sm bg-[#5794f2] hover:bg-[#3274d9] px-2.5 py-1 text-[11px] font-sans font-semibold text-[#111217] transition-colors"
+                            title="Directly configure benchmark for this model"
+                          >
+                            Benchmark
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setActiveModelForQuant(model);
+                              setQuantModalOpen(true);
+                            }}
+                            className="rounded-sm border border-[#2c3235] bg-[#22252b] hover:bg-[#2c3235] px-2 py-1 text-[11px] font-sans text-[#8e8e9e] hover:text-[#ccccdc] transition-colors"
+                            title="Quantize to INT8 precision"
+                          >
+                            INT8
+                          </button>
+
+                          <button
+                            onClick={() => handleDelete(model.id)}
+                            className="p-1 rounded-sm text-[#8e8e9e] hover:text-[#f2495c] hover:bg-[#f2495c]/10 transition-colors"
+                            title="Delete model"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* DETAIL / INSPECTION PANEL (Split-View / Collapsible Drawer) */}
+      {selectedModel && (
+        <div className="bg-[#181b1f] border border-[#2c3235] rounded-sm overflow-hidden space-y-0 transition-all">
+          {/* Detail Panel Header */}
+          <div className="bg-[#1f2328] px-4 py-2.5 border-b border-[#2c3235] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <FileCode className="h-4 w-4 text-[#5794f2]" />
+              <span className="font-sans font-semibold text-xs text-white">
+                Model Specification &amp; Graph Inspection
+              </span>
+              <span className="text-[#8e8e9e]">•</span>
+              <span className="font-sans font-bold text-xs text-white">
+                {selectedModel.name}
+              </span>
+              <span className="font-mono text-[11px] text-[#8e8e9e]">
+                ({selectedModel.id})
+              </span>
+              <span className="rounded-sm bg-[#22252b] border border-[#2c3235] px-1.5 py-0.5 text-[10px] font-sans uppercase text-[#5794f2] font-semibold">
+                {selectedModel.format}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Direct Benchmark Model Button */}
+              <button
+                onClick={() => onSelectForBenchmark(selectedModel.id)}
+                className="rounded-sm bg-[#5794f2] hover:bg-[#3274d9] px-3 py-1.5 text-xs font-sans font-semibold text-[#111217] flex items-center gap-1.5 transition-colors shadow-sm"
+                title="Directly benchmark this model"
+              >
+                <span>Benchmark Model</span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveModelForQuant(selectedModel);
+                  setQuantModalOpen(true);
+                }}
+                className="rounded-sm border border-[#2c3235] bg-[#22252b] hover:bg-[#2c3235] px-2.5 py-1.5 text-xs font-sans font-medium text-[#ccccdc] transition-colors"
+              >
+                Quantize (INT8)
+              </button>
+
+              <button
+                onClick={() => handleCheckCompatibility(selectedModel.id)}
+                disabled={isCheckingCompat}
+                className="rounded-sm border border-[#2c3235] bg-[#22252b] hover:bg-[#2c3235] px-2.5 py-1.5 text-xs font-sans font-medium text-[#ccccdc] transition-colors disabled:opacity-50"
+              >
+                {isCheckingCompat ? "Evaluating..." : "Compatibility Matrix"}
+              </button>
+
+              {/* Collapse / Expand Toggle */}
+              <button
+                onClick={() => setDrawerCollapsed(!drawerCollapsed)}
+                className="p-1.5 rounded-sm border border-[#2c3235] bg-[#22252b] text-[#8e8e9e] hover:text-white transition-colors"
+                title={drawerCollapsed ? "Expand inspection drawer" : "Collapse inspection drawer"}
+              >
+                {drawerCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+              </button>
+
+              {/* Close Drawer Button */}
+              <button
+                onClick={() => setSelectedModelId(null)}
+                className="p-1.5 rounded-sm border border-[#2c3235] bg-[#22252b] text-[#8e8e9e] hover:text-[#f2495c] transition-colors"
+                title="Close inspection drawer"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
 
-          {/* Right: Natural Language Summary Card & Progressive Drawer (7 cols) */}
-          <div className="lg:col-span-7 space-y-4">
-            {!selectedModel ? (
-              <div className="glass-panel rounded-2xl p-12 text-center text-zinc-400 space-y-3 shadow-xl">
-                <Info className="h-8 w-8 text-zinc-600 mx-auto" />
-                <p className="text-sm font-semibold text-zinc-200">Select a model to view inspection</p>
-                <p className="text-xs text-zinc-400 font-mono">
-                  Choose a model from the left column to view its high-level deployment summary and technical details.
-                </p>
+          {!drawerCollapsed && (
+            <div className="p-4 space-y-5 text-xs font-sans">
+              {/* Metadata Summary Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="bg-[#111217] border border-[#2c3235] p-2.5 rounded-sm">
+                  <span className="font-sans font-semibold text-xs text-[#8e8e9e] block">Graph Nodes</span>
+                  <span className="font-sans text-sm font-bold text-[#ccccdc]">
+                    <span className="font-mono text-white">{selectedModel.node_count}</span> Operators
+                  </span>
+                </div>
+                <div className="bg-[#111217] border border-[#2c3235] p-2.5 rounded-sm">
+                  <span className="font-sans font-semibold text-xs text-[#8e8e9e] block">ONNX Opset</span>
+                  <span className="font-sans text-sm font-bold text-[#ccccdc]">
+                    Opset <span className="font-mono text-white">{selectedModel.opset_version || 17}</span>
+                  </span>
+                </div>
+                <div className="bg-[#111217] border border-[#2c3235] p-2.5 rounded-sm">
+                  <span className="font-sans font-semibold text-xs text-[#8e8e9e] block">File Size</span>
+                  <span className="font-sans text-sm font-bold text-[#ccccdc]">
+                    {(selectedModel.file_size_bytes / (1024 * 1024)).toFixed(2)} MB
+                  </span>
+                </div>
+                <div className="bg-[#111217] border border-[#2c3235] p-2.5 rounded-sm">
+                  <span className="font-sans font-semibold text-xs text-[#8e8e9e] block">Spatial Input</span>
+                  <code className="font-mono text-sm font-bold text-[#5794f2] block">
+                    {getInputResolution(selectedModel)}
+                  </code>
+                </div>
               </div>
-            ) : (
-              <>
-                {/* 1. MODEL TECHNICAL PROFILE & SPECIFICATION CARD */}
-                <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-5 sm:p-6 space-y-5 shadow-xl">
-                  {/* Header */}
-                  <div className="flex items-start justify-between gap-4 border-b border-zinc-800 pb-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-base font-bold text-zinc-100 font-sans">
-                          {selectedModel.name}
-                        </h3>
-                        <span className="rounded bg-teal-500/10 border border-teal-500/30 px-2 py-0.5 text-[10px] font-mono text-teal-300 uppercase font-semibold">
-                          {selectedModel.format}
-                        </span>
-                      </div>
-                      <p className="text-xs text-zinc-400 font-mono mt-0.5">
-                        Architecture Profile: {selectedTaskName} • Opset {selectedModel.opset_version || 17}
-                      </p>
-                    </div>
-                    <span className="text-xs font-mono font-semibold text-zinc-300 bg-zinc-800/80 border border-zinc-700/60 px-2.5 py-1 rounded-lg">
-                      {selectedSizeMb} MB
+
+              {/* Checksum & Path (Monospace strictly for hashes and paths) */}
+              <div className="bg-[#111217] border border-[#2c3235] p-3 rounded-sm space-y-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+                  <span className="font-sans font-semibold text-xs text-[#8e8e9e]">Filepath:</span>
+                  <div className="flex items-center gap-1.5">
+                    <code className="font-mono text-xs text-[#ccccdc] truncate max-w-md">{selectedModel.filepath}</code>
+                    <CopySnippet text={selectedModel.filepath} />
+                  </div>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs pt-1 border-t border-[#2c3235]/60">
+                  <span className="font-sans font-semibold text-xs text-[#8e8e9e]">SHA-256 Checksum:</span>
+                  <div className="flex items-center gap-1.5">
+                    <code className="font-mono text-xs text-[#8e8e9e] select-all truncate max-w-md">{selectedModel.sha256}</code>
+                    <CopySnippet text={selectedModel.sha256} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Split Tables: Tensor Dimensions & Operator Breakdown */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                {/* Tensor Dimensions Table (6 cols) */}
+                <div className="lg:col-span-6 space-y-2">
+                  <div className="flex items-center justify-between pb-1 border-b border-[#2c3235]">
+                    <span className="font-sans font-semibold text-xs text-white">
+                      Input &amp; Output Tensor Signatures
+                    </span>
+                    <span className="font-sans text-xs text-[#8e8e9e]">
+                      {(selectedModel.input_shapes?.length || 0) + (selectedModel.output_shapes?.length || 0)} total
                     </span>
                   </div>
 
-                  {/* Dense Specification Matrix */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
-                    <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800">
-                      <div className="text-[10px] text-zinc-500 uppercase font-semibold">
-                        Input Signature
-                      </div>
-                      <div className="text-xs font-bold text-teal-300 mt-1">
-                        {selectedResolution}
-                      </div>
-                    </div>
-                    <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800">
-                      <div className="text-[10px] text-zinc-500 uppercase font-semibold">
-                        Graph Nodes
-                      </div>
-                      <div className="text-xs font-bold text-zinc-200 mt-1">
-                        {selectedModel.node_count} Operators
-                      </div>
-                    </div>
-                    <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800">
-                      <div className="text-[10px] text-zinc-500 uppercase font-semibold">
-                        Task Type
-                      </div>
-                      <div className="text-xs font-bold text-zinc-200 mt-1 capitalize">
-                        {selectedTaskName}
-                      </div>
-                    </div>
-                    <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800">
-                      <div className="text-[10px] text-zinc-500 uppercase font-semibold">
-                        Status
-                      </div>
-                      <div className="text-xs font-bold text-emerald-400 mt-1 flex items-center gap-1">
-                        <CheckCircle2 className="h-3 w-3" /> Ready
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Action Bar */}
-                  <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                    <button
-                      onClick={() => onSelectForBenchmark(selectedModel.id)}
-                      className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-400 py-2.5 px-4 text-xs font-bold text-zinc-950 hover:brightness-110 shadow-md shadow-teal-500/20 transition-all cursor-pointer font-sans"
-                    >
-                      <span>Configure Benchmark</span>
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActiveModelForQuant(selectedModel);
-                        setQuantModalOpen(true);
-                      }}
-                      className="rounded-xl border border-zinc-700 bg-zinc-800 py-2.5 px-4 text-xs font-semibold text-zinc-200 hover:bg-zinc-700 transition-all font-sans"
-                    >
-                      Quantize (INT8)
-                    </button>
-                    <button
-                      onClick={() => handleCheckCompatibility(selectedModel.id)}
-                      disabled={isCheckingCompat}
-                      className="rounded-xl border border-zinc-700 bg-zinc-800 py-2.5 px-4 text-xs font-semibold text-zinc-200 hover:bg-zinc-700 transition-all font-sans disabled:opacity-50"
-                    >
-                      {isCheckingCompat ? "Evaluating..." : "Compatibility Matrix"}
-                    </button>
+                  <div className="border border-[#2c3235] rounded-sm overflow-hidden bg-[#111217]">
+                    <table className="w-full text-left text-xs border-collapse font-sans">
+                      <thead>
+                        <tr className="bg-[#141619] border-b border-[#2c3235] text-xs font-sans text-[#8e8e9e]">
+                          <th className="py-2 px-2.5 font-sans font-semibold text-xs text-[#ccccdc]">Direction</th>
+                          <th className="py-2 px-2.5 font-sans font-semibold text-xs text-[#ccccdc]">Tensor Name</th>
+                          <th className="py-2 px-2.5 font-sans font-semibold text-xs text-[#ccccdc]">Shape / Dimensions</th>
+                          <th className="py-2 px-2.5 font-sans font-semibold text-xs text-[#ccccdc]">Data Type</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#2c3235]/60">
+                        {/* Inputs */}
+                        {Array.isArray(selectedModel.input_shapes) &&
+                          selectedModel.input_shapes.map((inp, idx) => (
+                            <tr key={`in-${idx}`} className="hover:bg-[#181b1f]">
+                              <td className="py-1.5 px-2.5">
+                                <span className="rounded-sm bg-[#5794f2]/10 border border-[#5794f2]/30 px-1 py-0.2 text-[9px] font-sans text-[#5794f2] font-semibold">
+                                  INPUT
+                                </span>
+                              </td>
+                              <td className="py-1.5 px-2.5 font-sans text-[#ccccdc] font-medium">{inp.name || `input_${idx}`}</td>
+                              <td className="py-1.5 px-2.5">
+                                <code className="font-mono text-xs text-[#5794f2] font-semibold">{formatShapeString(inp.shape)}</code>
+                              </td>
+                              <td className="py-1.5 px-2.5">
+                                <code className="font-mono text-xs text-[#8e8e9e]">{inp.dtype || "float32"}</code>
+                              </td>
+                            </tr>
+                          ))}
+                        {/* Outputs */}
+                        {Array.isArray(selectedModel.output_shapes) &&
+                          selectedModel.output_shapes.map((out, idx) => (
+                            <tr key={`out-${idx}`} className="hover:bg-[#181b1f]">
+                              <td className="py-1.5 px-2.5">
+                                <span className="rounded-sm bg-[#73bf69]/10 border border-[#73bf69]/30 px-1 py-0.2 text-[9px] font-sans text-[#73bf69] font-semibold">
+                                  OUTPUT
+                                </span>
+                              </td>
+                              <td className="py-1.5 px-2.5 font-sans text-[#ccccdc] font-medium">{out.name || `output_${idx}`}</td>
+                              <td className="py-1.5 px-2.5">
+                                <code className="font-mono text-xs text-[#73bf69] font-semibold">{formatShapeString(out.shape)}</code>
+                              </td>
+                              <td className="py-1.5 px-2.5">
+                                <code className="font-mono text-xs text-[#8e8e9e]">{out.dtype || "float32"}</code>
+                              </td>
+                            </tr>
+                          ))}
+                        {(!selectedModel.input_shapes?.length && !selectedModel.output_shapes?.length) && (
+                          <tr>
+                            <td colSpan={4} className="py-4 text-center text-[#8e8e9e] font-sans">
+                              No tensor shapes defined
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
 
-                {/* 2. EXPANDABLE DETAILED TECHNICAL INSPECTION (LEVEL 3) DRAWER */}
-                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/40 overflow-hidden shadow-xl transition-all">
-                  <button
-                    type="button"
-                    onClick={() => setTechDrawerOpen(!techDrawerOpen)}
-                    className="w-full flex items-center justify-between p-4 bg-zinc-900/80 hover:bg-zinc-900 transition-colors text-left"
-                    aria-expanded={techDrawerOpen}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-teal-500/10 text-teal-400 border border-teal-500/20">
-                        <FileCode className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-zinc-200 text-sm">
-                            Detailed Technical Inspection (Level 3)
-                          </span>
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-400 border border-zinc-700/60 font-medium">
-                            Opsets, Tensors & Graph
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-zinc-400 font-mono mt-0.5">
-                          Deep operator breakdown, raw tensor dimensions, and checksums
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs font-mono text-zinc-400">
-                      <span>{techDrawerOpen ? "Hide Details" : "Show Details"}</span>
-                      <ChevronDown
-                        className={`h-4 w-4 transition-transform duration-200 ${
-                          techDrawerOpen ? "rotate-180 text-teal-400" : ""
-                        }`}
-                      />
-                    </div>
-                  </button>
+                {/* Operator Breakdown Table (6 cols) */}
+                <div className="lg:col-span-6 space-y-2">
+                  <div className="flex items-center justify-between pb-1 border-b border-[#2c3235]">
+                    <span className="font-sans font-semibold text-xs text-white">
+                      Operator Frequency Breakdown
+                    </span>
+                    <span className="font-sans text-xs text-[#8e8e9e]">
+                      {Object.keys(selectedModel.operators || {}).length} Unique Op Types
+                    </span>
+                  </div>
 
-                  {techDrawerOpen && (
-                    <div className="p-5 border-t border-zinc-800/80 space-y-4 text-xs font-mono bg-zinc-950/80">
-                      {/* Opset & Graph nodes */}
-                      <div className="grid grid-cols-2 gap-2 text-[11px]">
-                        <div className="bg-zinc-900/80 p-2.5 rounded-lg border border-zinc-800/70">
-                          <span className="text-zinc-500 block text-[10px] uppercase font-semibold">ONNX Opset Version</span>
-                          <span className="text-zinc-200 font-bold text-sm">Opset {selectedModel.opset_version || 17}</span>
-                        </div>
-                        <div className="bg-zinc-900/80 p-2.5 rounded-lg border border-zinc-800/70">
-                          <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Total Graph Nodes</span>
-                          <span className="text-zinc-200 font-bold text-sm">{selectedModel.node_count} Ops</span>
-                        </div>
-                      </div>
-
-                      {/* SHA-256 Checksum */}
-                      <div>
-                        <span className="text-zinc-400 text-[11px] block">Cryptographic Checksum (SHA-256):</span>
-                        <p className="text-[10px] text-zinc-400 break-all bg-zinc-900/90 p-2.5 rounded-lg border border-zinc-800/80 mt-1 font-mono select-all">
-                          {selectedModel.sha256}
-                        </p>
-                      </div>
-
-                      {/* Raw Tensor Signatures (Inputs & Outputs) */}
-                      <div>
-                        <span className="text-zinc-400 text-[11px] block mb-1.5">Raw Tensor Dimensions:</span>
-                        <div className="space-y-2 bg-zinc-900/70 p-3 rounded-xl border border-zinc-800/80">
-                          <div>
-                            <div className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-1">
-                              Input Tensors
-                            </div>
-                            {Array.isArray(selectedModel.input_shapes) && selectedModel.input_shapes.length > 0 ? (
-                              <div className="space-y-1">
-                                {selectedModel.input_shapes.map((inp, idx) => (
-                                  <div
-                                    key={idx}
-                                    className="flex items-center justify-between text-[11px] bg-zinc-950/80 px-2.5 py-1.5 rounded border border-zinc-800/60"
-                                  >
-                                    <span className="text-zinc-300 font-medium">{inp.name || `input_${idx}`}</span>
-                                    <span className="text-teal-400 font-mono">
-                                      [{Array.isArray(inp.shape) ? inp.shape.join(", ") : ""}]
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-zinc-500 text-[10px]">None specified</span>
-                            )}
-                          </div>
-                          <div className="pt-2 border-t border-zinc-800/60">
-                            <div className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-1">
-                              Output Tensors
-                            </div>
-                            {Array.isArray(selectedModel.output_shapes) && selectedModel.output_shapes.length > 0 ? (
-                              <div className="space-y-1">
-                                {selectedModel.output_shapes.map((out, idx) => (
-                                  <div
-                                    key={idx}
-                                    className="flex items-center justify-between text-[11px] bg-zinc-950/80 px-2.5 py-1.5 rounded border border-zinc-800/60"
-                                  >
-                                    <span className="text-zinc-300 font-medium">{out.name || `output_${idx}`}</span>
-                                    <span className="text-teal-400 font-mono">
-                                      [{Array.isArray(out.shape) ? out.shape.join(", ") : ""}]
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-zinc-500 text-[10px]">None specified</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Operator Breakdown Histogram */}
-                      <div>
-                        <div className="flex items-center justify-between text-zinc-400 text-[11px] mb-2">
-                          <span>Operator Breakdown Histogram:</span>
-                          <span className="text-zinc-500">{Object.keys(selectedModel.operators || {}).length} Unique Ops</span>
-                        </div>
-                        <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                          {Object.entries(selectedModel.operators || {}).map(([op, count]) => {
+                  <div className="border border-[#2c3235] rounded-sm overflow-hidden bg-[#111217] max-h-60 overflow-y-auto">
+                    <table className="w-full text-left text-xs border-collapse font-sans">
+                      <thead>
+                        <tr className="bg-[#141619] border-b border-[#2c3235] text-xs font-sans text-[#8e8e9e] sticky top-0">
+                          <th className="py-2 px-2.5 font-sans font-semibold text-xs text-[#ccccdc]">Operator Type</th>
+                          <th className="py-2 px-2.5 font-sans font-semibold text-xs text-[#ccccdc] text-right">Count</th>
+                          <th className="py-2 px-2.5 font-sans font-semibold text-xs text-[#ccccdc] text-right">Frequency</th>
+                          <th className="py-2 px-2.5 font-sans font-semibold text-xs text-[#ccccdc] w-28">Distribution</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#2c3235]/60">
+                        {Object.entries(selectedModel.operators || {})
+                          .sort(([, a], [, b]) => b - a)
+                          .map(([op, count]) => {
                             const pct = Math.min(
                               100,
                               Math.round((count / (selectedModel.node_count || 1)) * 100)
                             );
                             return (
-                              <div key={op} className="space-y-1">
-                                <div className="flex justify-between text-[11px]">
-                                  <span className="text-zinc-200 font-semibold">{op}</span>
-                                  <span className="text-teal-400 font-bold">
-                                    {count} ({pct}%)
-                                  </span>
-                                </div>
-                                <div className="h-1.5 w-full bg-zinc-800/80 rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full bg-gradient-to-r from-teal-500 to-emerald-400 rounded-full transition-all duration-300"
-                                    style={{ width: `${Math.max(5, pct)}%` }}
-                                  />
-                                </div>
-                              </div>
+                              <tr key={op} className="hover:bg-[#181b1f]">
+                                <td className="py-1.5 px-2.5 font-mono text-xs text-[#ccccdc] font-medium">{op}</td>
+                                <td className="py-1.5 px-2.5 text-right font-mono text-white font-bold">{count}</td>
+                                <td className="py-1.5 px-2.5 text-right font-mono text-[#5794f2]">{pct}%</td>
+                                <td className="py-1.5 px-2.5">
+                                  <div className="h-1.5 w-full bg-[#22252b] rounded-none overflow-hidden">
+                                    <div
+                                      className="h-full bg-[#5794f2]"
+                                      style={{ width: `${Math.max(4, pct)}%` }}
+                                    />
+                                  </div>
+                                </td>
+                              </tr>
                             );
                           })}
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                        {!Object.keys(selectedModel.operators || {}).length && (
+                          <tr>
+                            <td colSpan={4} className="py-4 text-center text-[#8e8e9e] font-sans">
+                              No operator data recorded
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </>
-            )}
-          </div>
+              </div>
+
+              {/* Supported Runtime Backends & Execution Providers */}
+              <div className="space-y-2 pt-2 border-t border-[#2c3235]">
+                <div className="flex items-center justify-between">
+                  <span className="font-sans font-semibold text-xs text-white">
+                    Supported Runtime Backends &amp; Execution Providers
+                  </span>
+                  <span className="font-sans text-xs text-[#73bf69] flex items-center gap-1">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Ready for Benchmark
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+                  <div className="bg-[#111217] border border-[#2c3235] p-2.5 rounded-sm space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-sans font-semibold text-[#ccccdc]">ONNX Runtime CPU</span>
+                      <span className="text-[9px] bg-[#73bf69]/10 text-[#73bf69] border border-[#73bf69]/30 px-1 rounded-sm font-sans font-medium">
+                        ACTIVE
+                      </span>
+                    </div>
+                    <p className="font-sans text-[11px] text-[#8e8e9e]">CPUExecutionProvider (Native AVX / VNNI)</p>
+                    <p className="font-sans text-[11px] text-[#5794f2]">FP32, INT8 Dynamic</p>
+                  </div>
+
+                  <div className="bg-[#111217] border border-[#2c3235] p-2.5 rounded-sm space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-sans font-semibold text-[#ccccdc]">TensorRT Execution</span>
+                      <span className="text-[9px] bg-[#5794f2]/10 text-[#5794f2] border border-[#5794f2]/30 px-1 rounded-sm font-sans font-medium">
+                        ACCELERATED
+                      </span>
+                    </div>
+                    <p className="font-sans text-[11px] text-[#8e8e9e]">TensorrtExecutionProvider (CUDA Cores)</p>
+                    <p className="font-sans text-[11px] text-[#5794f2]">FP32, FP16, INT8 Static</p>
+                  </div>
+
+                  <div className="bg-[#111217] border border-[#2c3235] p-2.5 rounded-sm space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-sans font-semibold text-[#ccccdc]">Intel OpenVINO</span>
+                      <span className="text-[9px] bg-[#22252b] text-[#8e8e9e] border border-[#2c3235] px-1 rounded-sm font-sans font-medium">
+                        SUPPORTED
+                      </span>
+                    </div>
+                    <p className="font-sans text-[11px] text-[#8e8e9e]">OpenVINOExecutionProvider (Intel CPU/iGPU/NPU)</p>
+                    <p className="font-sans text-[11px] text-[#5794f2]">FP32, FP16, INT8</p>
+                  </div>
+
+                  <div className="bg-[#111217] border border-[#2c3235] p-2.5 rounded-sm space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-sans font-semibold text-[#ccccdc]">HailoRT Engine</span>
+                      <span className="text-[9px] bg-[#f59f00]/10 text-[#f59f00] border border-[#f59f00]/30 px-1 rounded-sm font-sans font-medium">
+                        COMPILATION
+                      </span>
+                    </div>
+                    <p className="font-sans text-[11px] text-[#8e8e9e]">Hailo Dataflow Compiler (Hailo-8 M.2 NPU)</p>
+                    <p className="font-sans text-[11px] text-[#5794f2]">INT8 Quantized HAR</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Quantization Modal */}
+      {/* Quantization Modal (Grafana Panel Style) */}
       {quantModalOpen && activeModelForQuant && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-          <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/95 p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-              <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
-                <Sliders className="h-4 w-4 text-teal-400" />
-                Quantize Model: {activeModelForQuant.name}
-              </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-sm border border-[#2c3235] bg-[#181b1f] p-5 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-[#2c3235] pb-2.5">
+              <div className="flex items-center gap-2">
+                <Sliders className="h-4 w-4 text-[#5794f2]" />
+                <h3 className="font-sans font-semibold text-xs text-white">
+                  Quantize Model: {activeModelForQuant.name}
+                </h3>
+              </div>
               <button
                 onClick={() => setQuantModalOpen(false)}
-                className="text-zinc-400 hover:text-zinc-200 p-1"
+                className="text-[#8e8e9e] hover:text-[#ccccdc] p-1"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="space-y-3 text-xs font-mono">
+            <div className="space-y-3 text-xs font-sans">
               <div>
-                <label className="text-zinc-400 block mb-1.5 font-sans font-medium">Optimization Precision</label>
+                <label className="font-sans font-semibold text-xs text-[#8e8e9e] block mb-1.5">
+                  Optimization Precision Strategy
+                </label>
                 <select
                   value={quantType}
                   onChange={(e) => setQuantType(e.target.value)}
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-2.5 text-zinc-200 focus:border-teal-500 focus:outline-none"
+                  className="w-full rounded-sm border border-[#2c3235] bg-[#111217] p-2 text-[#ccccdc] focus:border-[#5794f2] focus:outline-none font-sans"
                 >
                   <option value="int8_dynamic">INT8 Dynamic Quantization (Fastest, High Compatibility)</option>
                   <option value="int8_static">INT8 Static Quantization (Calibration Data Reader)</option>
                   <option value="fp16">Float16 (FP16) Accelerator Lowering</option>
-                  <option value="graph_opt">Extended Graph Optimization (Constant Folding & Fusion)</option>
+                  <option value="graph_opt">Extended Graph Optimization (Constant Folding &amp; Fusion)</option>
                 </select>
               </div>
 
-              <div className="rounded-xl bg-zinc-950/80 border border-zinc-800 p-3.5 text-zinc-400 space-y-1">
-                <p className="text-teal-400 font-semibold">Optimization Impact:</p>
-                <p>• Up to 75% memory footprint reduction</p>
-                <p>• Accelerated inference on AVX-VNNI CPU and Tensor Cores</p>
-                <p>• Preserves model operator topology</p>
+              <div className="rounded-sm bg-[#111217] border border-[#2c3235] p-3 text-[#8e8e9e] space-y-1 text-xs font-sans">
+                <p className="text-[#5794f2] font-semibold">Telemetry &amp; Footprint Impact:</p>
+                <p>• Up to 75% memory RSS footprint reduction</p>
+                <p>• Accelerates execution on AVX-VNNI CPU and Tensor Cores</p>
+                <p>• Preserves node topology and input/output tensor signature</p>
               </div>
             </div>
 
-            <div className="flex justify-end gap-2.5 pt-2">
+            <div className="flex justify-end gap-2 pt-2 border-t border-[#2c3235]">
               <button
                 onClick={() => setQuantModalOpen(false)}
-                className="rounded-xl border border-zinc-700 px-4 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-800 transition-all"
+                className="rounded-sm border border-[#2c3235] bg-[#22252b] px-3 py-1.5 text-xs font-sans font-medium text-[#ccccdc] hover:bg-[#2c3235] transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleQuantizeSubmit}
                 disabled={isQuantizing}
-                className="rounded-xl bg-gradient-to-r from-teal-500 to-emerald-400 px-4 py-2 text-xs font-bold text-zinc-950 hover:brightness-110 shadow-md shadow-teal-500/20 disabled:opacity-50 transition-all"
+                className="rounded-sm bg-[#5794f2] hover:bg-[#3274d9] px-4 py-1.5 text-xs font-sans font-semibold text-[#111217] disabled:opacity-50 transition-colors"
               >
                 {isQuantizing ? "Optimizing..." : "Apply Quantization"}
               </button>
@@ -691,81 +959,79 @@ export const ModelsTab: React.FC<ModelsTabProps> = ({
         </div>
       )}
 
-      {/* Compatibility Matrix Modal */}
+      {/* Compatibility Matrix Modal (Grafana Panel Style) */}
       {compatModalOpen && compatData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-          <div className="w-full max-w-3xl max-h-[85vh] flex flex-col rounded-2xl border border-zinc-800 bg-zinc-900/95 shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between border-b border-zinc-800 p-5 bg-zinc-950/80">
-              <div>
-                <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
-                  <Cpu className="h-4 w-4 text-teal-400" />
-                  Edge Hardware Compatibility Matrix
-                </h3>
-                <p className="text-xs text-zinc-400 font-mono mt-0.5">
-                  Model: {compatData.model_name}
-                </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-3xl max-h-[85vh] flex flex-col rounded-sm border border-[#2c3235] bg-[#181b1f] shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between border-b border-[#2c3235] p-4 bg-[#141619]">
+              <div className="flex items-center gap-2">
+                <Cpu className="h-4 w-4 text-[#5794f2]" />
+                <div>
+                  <h3 className="font-sans font-semibold text-xs text-white">
+                    Edge Hardware Compatibility Matrix
+                  </h3>
+                  <p className="text-xs text-[#8e8e9e] font-sans">
+                    Model: {compatData.model_name} <span className="font-mono">({compatData.model_id})</span>
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => setCompatModalOpen(false)}
-                className="text-zinc-400 hover:text-zinc-200 p-1"
+                className="text-[#8e8e9e] hover:text-[#ccccdc] p-1"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="p-5 overflow-y-auto space-y-4">
+            <div className="p-4 overflow-y-auto space-y-3 text-xs font-sans">
               {compatData.device_evaluations?.map((devEval: DeviceEvaluation) => {
-                const statusColor =
+                const statusBadge =
                   devEval.overall_status === "COMPATIBLE"
-                    ? "border-teal-500/40 bg-teal-500/10 text-teal-300"
+                    ? "border-[#73bf69]/30 bg-[#73bf69]/10 text-[#73bf69]"
                     : devEval.overall_status === "CONDITIONAL"
-                    ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
-                    : "border-rose-500/40 bg-rose-500/10 text-rose-300";
+                    ? "border-[#f59f00]/30 bg-[#f59f00]/10 text-[#f59f00]"
+                    : "border-[#f2495c]/30 bg-[#f2495c]/10 text-[#f2495c]";
 
                 return (
                   <div
                     key={devEval.hardware_id}
-                    className="rounded-xl border border-zinc-800/80 bg-zinc-950/80 p-4 space-y-3 font-mono"
+                    className="rounded-sm border border-[#2c3235] bg-[#111217] p-3 space-y-2"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-zinc-200 text-xs">
+                        <span className="font-sans font-semibold text-white">
                           {devEval.hardware_name}
                         </span>
-                        <span className="text-[10px] text-zinc-500">
+                        <span className="text-xs text-[#8e8e9e] font-sans">
                           ({devEval.runtime} • {devEval.precision?.toUpperCase()})
                         </span>
                       </div>
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded border ${statusColor}`}
-                      >
+                      <span className={`text-[10px] font-sans font-bold px-1.5 py-0.2 rounded-sm border ${statusBadge}`}>
                         {devEval.overall_status}
                       </span>
                     </div>
 
-                    <div className="space-y-1.5 pt-1">
+                    <div className="space-y-1 pt-1">
                       {devEval.findings?.map((f: DeviceFinding, idx: number) => {
                         const sevBadge =
                           f.severity === "ERROR"
-                            ? "text-rose-400 bg-rose-950/50 border-rose-800"
+                            ? "text-[#f2495c] bg-[#f2495c]/10 border-[#f2495c]/30"
                             : f.severity === "WARNING"
-                            ? "text-amber-400 bg-amber-950/50 border-amber-800"
-                            : "text-zinc-400 bg-zinc-900 border-zinc-800";
+                            ? "text-[#f59f00] bg-[#f59f00]/10 border-[#f59f00]/30"
+                            : "text-[#8e8e9e] bg-[#22252b] border-[#2c3235]";
 
                         return (
                           <div
                             key={idx}
-                            className="text-[11px] p-2.5 rounded-lg bg-zinc-900/60 border border-zinc-800/80 space-y-1"
+                            className="text-xs p-2 rounded-sm bg-[#181b1f] border border-[#2c3235] space-y-1 font-sans"
                           >
                             <div className="flex items-center gap-2">
-                              <span
-                                className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${sevBadge}`}
-                              >
+                              <span className={`text-[9px] font-sans font-bold px-1 py-0.2 rounded-sm border ${sevBadge}`}>
                                 {f.severity}
                               </span>
-                              <span className="text-zinc-300 font-medium">{f.message}</span>
+                              <span className="text-[#ccccdc] font-sans">{f.message}</span>
                             </div>
-                            <p className="text-[10px] text-teal-400/90 pl-1">
+                            <p className="text-[11px] text-[#5794f2] pl-1 font-sans">
                               Action: {f.remediation}
                             </p>
                           </div>
@@ -777,10 +1043,10 @@ export const ModelsTab: React.FC<ModelsTabProps> = ({
               })}
             </div>
 
-            <div className="border-t border-zinc-800 p-4 bg-zinc-950/80 flex justify-end">
+            <div className="border-t border-[#2c3235] p-3 bg-[#141619] flex justify-end">
               <button
                 onClick={() => setCompatModalOpen(false)}
-                className="rounded-xl bg-zinc-800 hover:bg-zinc-700 px-4 py-2 text-xs font-semibold text-zinc-200 transition-all"
+                className="rounded-sm bg-[#22252b] hover:bg-[#2c3235] border border-[#2c3235] px-4 py-1.5 text-xs font-sans font-semibold text-[#ccccdc] transition-colors"
               >
                 Close Matrix
               </button>

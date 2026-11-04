@@ -205,3 +205,4 @@ async def compare_runs(run_ids: List[str], db: AsyncSession = Depends(get_db)):
         "count": len(comparison),
         "runs": comparison
     }
+

@@ -34,8 +34,9 @@ class Settings(BaseModel):
     # Meta AI / LLM Configuration
     META_API_KEY: str = Field(default_factory=lambda: os.getenv("META_API_KEY", ""))
     META_API_BASE_URL: str = Field(default_factory=lambda: os.getenv("META_API_BASE_URL", "https://api.meta.ai/v1"))
-    META_MODEL: str = Field(default_factory=lambda: os.getenv("META_MODEL", "muse-spark-v1"))
-    AGENT_OFFLINE_MODE: bool = Field(default_factory=lambda: os.getenv("AGENT_OFFLINE_MODE", "true").lower() in ("true", "1", "yes"))
+    # Supported Meta models: muse-spark-1.3, muse-spark-1.2, muse-spark-1.1, or meta-models/muse-spark-open-1026 (Baseten partner-hosted)
+    META_MODEL: str = Field(default_factory=lambda: os.getenv("META_MODEL", "muse-spark-1.3"))
+    GEMINI_API_KEY: str = Field(default_factory=lambda: os.getenv("GEMINI_API_KEY", os.getenv("GOOGLE_API_KEY", "")))
 
     model_config = {
         "arbitrary_types_allowed": True

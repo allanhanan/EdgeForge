@@ -98,7 +98,9 @@ async def test_full_api_workflow():
         res_meta_status = await ac.get("/api/v1/agent/meta-status")
         assert res_meta_status.status_code == 200
         meta_status = res_meta_status.json()
-        assert "mode" in meta_status
+        assert meta_status["mode"] == "META_MUSE_SPARK"
+        assert meta_status["status"] == "ONLINE"
+        assert meta_status["configured"] is True
 
         # 10. Deployment export & verification
         export_payload = {
@@ -259,6 +261,7 @@ async def test_agent_tool_registry_and_null_model_handling():
             model_id=None
         )
         assert res_no_model["session_id"] is not None
+        assert "EdgeForge Deployment Decision" in res_no_model["reply"]
         assert "EdgeForge Deployment Recommendation" in res_no_model["reply"]
         assert len(res_no_model["traces"]) >= 1
 

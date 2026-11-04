@@ -1,20 +1,29 @@
 @import "tailwindcss";
 
 :root {
-  --background: #09090b;
-  --foreground: #f4f4f5;
-  --card-bg: rgba(16, 17, 22, 0.7);
-  --card-border: rgba(255, 255, 255, 0.08);
-  --card-border-hover: rgba(20, 184, 166, 0.35);
+  /* Dark palette tokens */
+  --background: #111217;
+  --foreground: #ccccdc;
+  --grafana-bg: #111217;
+  --grafana-panel: #181b1f;
+  --grafana-header: #1f2328;
+  --grafana-border: #2c3235;
+  --grafana-hover: #22252b;
+  --grafana-text: #ccccdc;
+  --grafana-text-muted: #8e8e9e;
+
+  /* Restrained Grafana accents */
+  --grafana-blue: #5794f2;
+  --grafana-green: #73bf69;
+  --grafana-yellow: #f59f00;
+  --grafana-orange: #f59f00;
+  --grafana-red: #f2495c;
+  --grafana-purple: #b877d9;
 }
 
 body {
-  background-color: #09090b;
-  background-image: 
-    radial-gradient(ellipse 80% 50% at 50% -15%, rgba(20, 184, 166, 0.12), transparent 70%),
-    radial-gradient(circle at 100% 100%, rgba(59, 130, 246, 0.03), transparent 40%);
-  background-attachment: fixed;
-  color: var(--foreground);
+  background-color: #111217;
+  color: #ccccdc;
   font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -24,26 +33,26 @@ code, pre, .font-mono {
   font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-/* Custom Scrollbars */
+/* Custom Scrollbars styled with Grafana border color */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #111217;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 9999px;
+  background: #2c3235;
+  border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.24);
+  background: #3e4448;
 }
 
-/* Hide scrollbar for tabs */
+/* Hide scrollbar utility */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -52,57 +61,84 @@ code, pre, .font-mono {
   scrollbar-width: none;
 }
 
-/* Glassmorphism card utilities */
+/* Grafana panel and engineering UI classes */
+.grafana-panel {
+  background-color: #181b1f;
+  border: 1px solid #2c3235;
+  border-radius: 2px;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-header {
+  padding: 8px 12px;
+  border-bottom: 1px solid #2c3235;
+  background-color: #1f2328;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ccccdc;
+  letter-spacing: 0.02em;
+}
+
+.panel-body {
+  padding: 12px;
+  flex: 1;
+}
+
+.grafana-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.grafana-table th {
+  text-align: left;
+  padding: 8px 12px;
+  background-color: #1f2328;
+  color: #8e8e9e;
+  font-weight: 500;
+  border-bottom: 1px solid #2c3235;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+
+.grafana-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #22252b;
+  color: #ccccdc;
+}
+
+.grafana-table tr:hover td {
+  background-color: #22252b;
+}
+
+/* Clean Grafana surfaces (replaces legacy glassmorphism & neon glow utilities) */
 .glass-panel {
-  background: rgba(16, 17, 22, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background-color: #181b1f;
+  border: 1px solid #2c3235;
+  border-radius: 2px;
 }
 
 .glass-card {
-  background: rgba(16, 17, 22, 0.6);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  background-color: #181b1f;
+  border: 1px solid #2c3235;
+  border-radius: 2px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .glass-card:hover {
-  background: rgba(22, 23, 30, 0.8);
-  border-color: rgba(20, 184, 166, 0.3);
-  box-shadow: 0 8px 30px -4px rgba(0, 0, 0, 0.5), 0 0 15px -3px rgba(20, 184, 166, 0.12);
+  background-color: #22252b;
+  border-color: #3e4448;
 }
 
-/* Subtle glowing text */
 .text-gradient-teal {
-  background: linear-gradient(135deg, #a7f3d0 0%, #2dd4bf 50%, #0d9488 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: #ccccdc;
 }
 
 .text-gradient-silver {
-  background: linear-gradient(180deg, #ffffff 0%, #a1a1aa 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-/* Pulse / radar keyframes */
-@keyframes radar-pulse {
-  0% {
-    transform: scale(0.95);
-    opacity: 0.8;
-  }
-  50% {
-    transform: scale(1.6);
-    opacity: 0;
-  }
-  100% {
-    transform: scale(0.95);
-    opacity: 0;
-  }
-}
-
-.animate-radar-ring {
-  animation: radar-pulse 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  color: #ccccdc;
 }

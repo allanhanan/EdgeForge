@@ -157,7 +157,7 @@ class AgentSession(Base):
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     title = Column(String(255), nullable=False, default="Deployment Investigation")
-    mode = Column(String(50), nullable=False, default="OFFLINE_DETERMINISTIC")
+    mode = Column(String(50), nullable=False, default="META_MUSE_SPARK")
     created_at = Column(DateTime, default=datetime.utcnow)
 
     traces = relationship("AgentTrace", back_populates="session", cascade="all, delete-orphan", order_by="AgentTrace.step_number")

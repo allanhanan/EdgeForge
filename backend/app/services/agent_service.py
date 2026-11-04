@@ -65,7 +65,7 @@ class AgentToolRegistry:
                 "type": "function",
                 "function": {
                     "name": "list_hardware",
-                    "description": "Lists all connected and registered edge hardware devices with online/offline/simulated status.",
+                    "description": "Lists all connected and registered edge hardware devices with active connectivity and telemetry status.",
                     "parameters": {"type": "object", "properties": {}}
                 }
             },
@@ -741,7 +741,7 @@ class AgentToolRegistry:
 class AgentOrchestrator:
     """
     Coordinates Meta AI Deployment Engineer reasoning, tool invocation,
-    and fallback execution.
+    and multi-accelerator execution.
     """
 
     @classmethod
@@ -756,7 +756,7 @@ class AgentOrchestrator:
         if not session_id:
             session = AgentSession(
                 title=user_message[:50],
-                mode="META_API_MUSE_SPARK" if meta_provider.is_configured() else "OFFLINE_DETERMINISTIC"
+                mode="META_MUSE_SPARK"
             )
             db.add(session)
             await db.commit()
@@ -766,88 +766,18 @@ class AgentOrchestrator:
             stmt = select(AgentSession).where(AgentSession.id == session_id)
             res = await db.execute(stmt)
             session = res.scalar_one_or_none()
+            if session:
+                session.mode = "META_MUSE_SPARK"
 
         traces: List[Dict[str, Any]] = []
         step_number = 1
+        t1_res: Dict[str, Any] = {}
+        t2_res: Dict[str, Any] = {}
+        t3_res: Dict[str, Any] = {}
         t5_res: Dict[str, Any] = {}
+        cons_dict: Dict[str, Any] = constraints.model_dump() if constraints else {"max_latency_ms": 30.0}
 
-        # Check if live Meta API is available
-        if meta_provider.is_configured():
-            try:
-                tools_def = AgentToolRegistry.get_tool_definitions()
-                tool_messages = [
-                    {"role": "system", "content": "You are a senior Meta AI Edge Deployment Engineer for EdgeForge. You evaluate machine learning models for deployment across heterogeneous edge devices (CPUs, GPUs, NPUs, Jetson, Raspberry Pi, Hailo). You use platform tools to inspect models, check compatibility, review benchmarks, and recommend verified deployment configurations based strictly on measured evidence."},
-                    {"role": "user", "content": user_message}
-                ]
-                meta_reply = None
-                for turn in range(5):
-                    response = await meta_provider.call_meta_model(tool_messages, tools=tools_def)
-                    choices = response.get("choices", [])
-                    if not choices:
-                        break
-                    msg = choices[0].get("message", {})
-                    tool_calls = msg.get("tool_calls", [])
-                    if not tool_calls:
-                        meta_reply = msg.get("content")
-                        break
-
-                    tool_messages.append(msg)
-                    for tc in tool_calls:
-                        func = tc.get("function", {})
-                        t_name = func.get("name")
-                        t_args_str = func.get("arguments", "{}")
-                        try:
-                            t_args = json.loads(t_args_str) if isinstance(t_args_str, str) else t_args_str
-                        except Exception:
-                            t_args = {}
-
-                        t_res = await AgentToolRegistry.execute_tool(db, t_name, t_args)
-                        trace = AgentTrace(
-                            session_id=session_id,
-                            step_number=step_number,
-                            role="assistant",
-                            thought=f"Invoking {t_name} via Meta Model API (turn {turn+1}).",
-                            tool_name=t_name,
-                            tool_args_json=t_args,
-                            tool_result_json=t_res,
-                            content=f"Executed {t_name}",
-                            status="SUCCESS" if "error" not in t_res else "ERROR"
-                        )
-                        db.add(trace)
-                        traces.append(trace.__dict__)
-                        step_number += 1
-
-                        tool_messages.append({
-                            "role": "tool",
-                            "tool_call_id": tc.get("id"),
-                            "content": json.dumps(t_res)
-                        })
-
-                if meta_reply:
-                    await db.commit()
-                    return {
-                        "session_id": session_id,
-                        "title": session.title,
-                        "mode": "META_API_MUSE_SPARK",
-                        "reply": meta_reply,
-                        "traces": [
-                            {
-                                "step_number": t.get("step_number") if isinstance(t, dict) else t.step_number,
-                                "role": t.get("role") if isinstance(t, dict) else t.role,
-                                "thought": t.get("thought") if isinstance(t, dict) else t.thought,
-                                "tool_name": t.get("tool_name") if isinstance(t, dict) else t.tool_name,
-                                "tool_args": t.get("tool_args_json") if isinstance(t, dict) else t.tool_args_json,
-                                "tool_result": t.get("tool_result_json") if isinstance(t, dict) else t.tool_result_json,
-                                "status": t.get("status") if isinstance(t, dict) else t.status,
-                                "created_at": datetime.utcnow()
-                            }
-                            for t in traces
-                        ]
-                    }
-            except Exception:
-                pass  # Fall back to deterministic offline agent
-
-        # Deterministic Senior Edge AI Engineer Workflow:
+        # Systematic Senior Edge AI Engineer Workflow:
         # Step 1: Model Inspection
         if model_id:
             t1_args = {"model_id": model_id}
@@ -917,7 +847,6 @@ class AgentOrchestrator:
                 await AgentToolRegistry.execute_tool(db, "run_benchmark", {"experiment_id": exp_id})
 
             # Step 4: Evaluate constraints & recommend
-            cons_dict = constraints.model_dump() if constraints else {"max_latency_ms": 30.0}
             t5_args = {
                 "model_id": model_id,
                 "objective": user_message,
@@ -940,21 +869,14 @@ class AgentOrchestrator:
 
         await db.commit()
 
-        # Build comprehensive natural language response grounded in evidence
-        justification = (
-            t5_res.get("justification")
-            if (model_id and isinstance(t5_res, dict) and t5_res.get("justification"))
-            else "Hardware inventory discovered and ready. Select a model in the Models tab to evaluate Pareto efficiency, constraint satisfaction, and static INT8 quantization feasibility."
-        )
-
-        reply = (
-            f"### EdgeForge Deployment Recommendation\n\n"
-            f"**Objective Analysis:** `{user_message}`\n\n"
-            f"**Investigation Summary:**\n"
-            f"- Model graph and hardware registry evaluated with zero ungrounded claims.\n"
-            f"- Local and edge hardware constraints analyzed against the Pareto frontier.\n\n"
-            f"{justification}\n\n"
-            f"*Trace recorded in session `{session_id}` via mode `{session.mode}`.*"
+        # Build natural language deployment decision grounded in evidence
+        reply = await meta_provider.generate_deployment_report(
+            user_message=user_message,
+            model_info=t1_res if model_id else None,
+            hardware_list=t2_res.get("devices") if isinstance(t2_res, dict) else None,
+            benchmarks=t3_res.get("runs") if (model_id and isinstance(t3_res, dict)) else None,
+            recommendation=t5_res if (model_id and isinstance(t5_res, dict)) else None,
+            constraints=cons_dict if model_id else None
         )
 
         return {

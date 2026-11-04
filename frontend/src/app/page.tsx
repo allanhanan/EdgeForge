@@ -1,7 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Navigation, TabType, WorkflowGoal, WORKFLOW_GOALS } from "@/components/Navigation";
+import {
+  Sidebar,
+  TopBar,
+  TabType,
+  WorkflowGoal,
+  WORKFLOW_GOALS,
+} from "@/components/Navigation";
 import { DashboardTab } from "@/components/DashboardTab";
 import { ModelsTab } from "@/components/ModelsTab";
 import { DatasetsTab } from "@/components/DatasetsTab";
@@ -32,6 +38,9 @@ import {
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() =>
+    typeof window !== "undefined" ? window.innerWidth < 768 : false
+  );
   const [activeGoal, setActiveGoal] = useState<WorkflowGoal>(null);
   const [isOnline, setIsOnline] = useState(false);
   const [metaStatus, setMetaStatus] = useState<MetaStatus | undefined>(undefined);
@@ -96,9 +105,18 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 6000);
-    return () => clearInterval(interval);
+    let mounted = true;
+    const run = () => {
+      if (mounted) {
+        void loadData();
+      }
+    };
+    run();
+    const interval = setInterval(run, 6000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
   }, [loadData]);
 
   const handleSelectModelForBenchmark = (modelId: string) => {
@@ -117,165 +135,182 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-teal-500/30 selection:text-teal-200">
-      <Navigation
+    <div className="min-h-screen bg-[#111217] text-[#ccccdc] flex font-sans">
+      {/* Persistent Vertical Sidebar */}
+      <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        metaStatus={metaStatus}
-        isOnline={isOnline}
-        activeGoal={activeGoal}
-        setActiveGoal={setActiveGoal}
-        onSelectGoal={handleSelectGoal}
-        onClearGoal={handleClearGoal}
+        collapsed={sidebarCollapsed}
+        setCollapsed={setSidebarCollapsed}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
-        {activeTab === "dashboard" && (
-          <DashboardTab
-            models={models}
-            hardware={hardware}
-            experiments={experiments}
-            runs={runs}
-            setActiveTab={setActiveTab}
-            onQuickBenchmark={() => setActiveTab("workbench")}
-            activeGoal={activeGoal}
-            onSelectGoal={handleSelectGoal}
-            onClearGoal={handleClearGoal}
-            onRefreshData={loadData}
-          />
-        )}
+      {/* Main Column */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+        {/* Compact Top Bar */}
+        <TopBar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          isOnline={isOnline}
+          metaStatus={metaStatus}
+          onRefresh={loadData}
+          activeGoal={activeGoal}
+          onClearGoal={handleClearGoal}
+          onSelectGoal={handleSelectGoal}
+        />
 
-        {activeTab === "models" && (
-          <ModelsTab
-            models={models}
-            onRefresh={loadData}
-            onSelectForBenchmark={handleSelectModelForBenchmark}
-          />
-        )}
+        {/* Content area: full-bleed viewport layout */}
+        <main className="flex-1 w-full p-4 sm:p-5">
+          {activeTab === "dashboard" && (
+            <DashboardTab
+              models={models}
+              hardware={hardware}
+              experiments={experiments}
+              runs={runs}
+              setActiveTab={setActiveTab}
+              onSelectTab={setActiveTab}
+              onSelectModel={setPreselectedModelId}
+              onQuickBenchmark={() => setActiveTab("workbench")}
+              activeGoal={activeGoal}
+              onSelectGoal={handleSelectGoal}
+              onClearGoal={handleClearGoal}
+              onRefreshData={loadData}
+              onSelectForCompare={handleSelectForCompare}
+            />
+          )}
 
-        {activeTab === "datasets" && (
-          <DatasetsTab
-            datasets={datasets}
-            onRefresh={loadData}
-            onSelectForBenchmark={handleSelectDatasetForBenchmark}
-          />
-        )}
+          {activeTab === "models" && (
+            <ModelsTab
+              models={models}
+              onRefresh={loadData}
+              onSelectForBenchmark={handleSelectModelForBenchmark}
+              initialModelId={preselectedModelId}
+            />
+          )}
 
-        {activeTab === "hardware" && (
-          <HardwareLabTab
-            hardware={hardware}
-            onRefresh={loadData}
-            activeGoal={activeGoal}
-            onClearGoal={handleClearGoal}
-            setActiveTab={setActiveTab}
-            onSelectGoal={handleSelectGoal}
-          />
-        )}
+          {activeTab === "datasets" && (
+            <DatasetsTab
+              datasets={datasets}
+              onRefresh={loadData}
+              onSelectForBenchmark={handleSelectDatasetForBenchmark}
+            />
+          )}
 
-        {activeTab === "workbench" && (
-          <WorkbenchTab
-            models={models}
-            hardware={hardware}
-            datasets={datasets}
-            initialModelId={preselectedModelId}
-            initialDatasetId={preselectedDatasetId}
-            onBenchmarkComplete={loadData}
-            setActiveTab={setActiveTab}
-            activeGoal={activeGoal}
-            onClearGoal={handleClearGoal}
-            onAskAI={handleAskAI}
-            onRefresh={loadData}
-          />
-        )}
+          {activeTab === "hardware" && (
+            <HardwareLabTab
+              hardware={hardware}
+              onRefresh={loadData}
+              activeGoal={activeGoal}
+              onClearGoal={handleClearGoal}
+              setActiveTab={(tab: string) => setActiveTab(tab as TabType)}
+              onSelectGoal={(goal: string) => handleSelectGoal(goal as WorkflowGoal)}
+            />
+          )}
 
-        {activeTab === "experiments" && (
-          <ExperimentsTab
-            experiments={experiments}
-            runs={runs}
-            models={models}
-            hardware={hardware}
-            onRefresh={loadData}
-            setActiveTab={setActiveTab}
-            onSelectForCompare={handleSelectForCompare}
-          />
-        )}
+          {activeTab === "workbench" && (
+            <WorkbenchTab
+              models={models}
+              hardware={hardware}
+              datasets={datasets}
+              initialModelId={preselectedModelId}
+              initialDatasetId={preselectedDatasetId}
+              onBenchmarkComplete={loadData}
+              setActiveTab={setActiveTab}
+              activeGoal={activeGoal}
+              onClearGoal={handleClearGoal}
+              onAskAI={handleAskAI}
+              onRefresh={loadData}
+            />
+          )}
 
-        {activeTab === "compare" && (
-          <CompareTab
-            runs={runs}
-            models={models}
-            hardware={hardware}
-            preselectedRunId={preselectedRunId}
-            setActiveTab={setActiveTab}
-            onAskAI={handleAskAI}
-            activeGoal={activeGoal}
-            onClearGoal={handleClearGoal}
-            onSelectGoal={handleSelectGoal}
-          />
-        )}
+          {activeTab === "experiments" && (
+            <ExperimentsTab
+              experiments={experiments}
+              runs={runs}
+              models={models}
+              hardware={hardware}
+              onRefresh={loadData}
+              setActiveTab={setActiveTab}
+              onSelectForCompare={handleSelectForCompare}
+            />
+          )}
 
-        {activeTab === "agent" && (
-          <AIEngineerTab
-            models={models}
-            hardware={hardware}
-            datasets={datasets}
-            runs={runs}
-            metaStatus={metaStatus}
-            onRefreshRuns={loadData}
-            setActiveTab={setActiveTab}
-            initialQuery={agentInitialQuery}
-            activeGoal={activeGoal}
-            onClearGoal={handleClearGoal}
-          />
-        )}
+          {activeTab === "compare" && (
+            <CompareTab
+              runs={runs}
+              models={models}
+              hardware={hardware}
+              preselectedRunId={preselectedRunId}
+              setActiveTab={setActiveTab}
+              onAskAI={handleAskAI}
+              activeGoal={activeGoal}
+              onClearGoal={handleClearGoal}
+              onSelectGoal={handleSelectGoal}
+            />
+          )}
 
-        {activeTab === "deployments" && (
-          <DeploymentsTab
-            models={models}
-            runs={runs}
-            hardware={hardware}
-            activeGoal={activeGoal}
-            onClearGoal={handleClearGoal}
-            onRefresh={loadData}
-            setActiveTab={setActiveTab}
-            onSelectGoal={handleSelectGoal}
-          />
-        )}
+          {activeTab === "agent" && (
+            <AIEngineerTab
+              models={models}
+              hardware={hardware}
+              datasets={datasets}
+              runs={runs}
+              metaStatus={metaStatus}
+              onRefreshRuns={loadData}
+              setActiveTab={setActiveTab}
+              initialQuery={agentInitialQuery}
+              activeGoal={activeGoal}
+              onClearGoal={handleClearGoal}
+            />
+          )}
 
-        {activeTab === "reports" && (
-          <ReportsTab
-            models={models}
-            setActiveTab={setActiveTab}
-            onRefresh={loadData}
-          />
-        )}
+          {activeTab === "deployments" && (
+            <DeploymentsTab
+              models={models}
+              runs={runs}
+              hardware={hardware}
+              activeGoal={activeGoal}
+              onClearGoal={handleClearGoal}
+              onRefresh={loadData}
+              setActiveTab={setActiveTab}
+              onSelectGoal={handleSelectGoal}
+            />
+          )}
 
-        {activeTab === "settings" && (
-          <SettingsTab
-            metaStatus={metaStatus}
-            models={models}
-            datasets={datasets}
-            hardware={hardware}
-            experiments={experiments}
-            runs={runs}
-            onRefreshAll={loadData}
-          />
-        )}
-      </main>
+          {activeTab === "reports" && (
+            <ReportsTab
+              models={models}
+              setActiveTab={setActiveTab}
+              onRefresh={loadData}
+            />
+          )}
 
-      {/* Footer */}
-      <footer className="border-t border-zinc-800/60 bg-zinc-950/70 py-6 px-6 text-center text-xs text-zinc-500 font-mono backdrop-blur-md">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-zinc-400">
-            <span className="font-semibold text-zinc-300">EdgeForge v1.0</span>
-            <span>•</span>
-            <span>Vendor-Neutral Edge AI Intelligence Engine</span>
+          {activeTab === "settings" && (
+            <SettingsTab
+              metaStatus={metaStatus}
+              models={models}
+              datasets={datasets}
+              hardware={hardware}
+              experiments={experiments}
+              runs={runs}
+              onRefreshAll={loadData}
+            />
+          )}
+        </main>
+
+        {/* Footer */}
+        <footer className="border-t border-[#2c3235] bg-[#181b1f] py-3 px-5 text-xs text-[#8e8e9e] font-mono">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-[#ccccdc]">
+              <span className="font-semibold">EdgeForge v1.0</span>
+              <span className="text-[#8e8e9e]">/</span>
+              <span className="text-[#8e8e9e]">Vendor-Neutral Edge AI Intelligence Engine</span>
+            </div>
+            <p className="text-[11px] text-[#8e8e9e]">
+              Meta Global AI Developer Hackathon 2026 • Verified Physical & In-Memory Profiling
+            </p>
           </div>
-          <p className="text-[11px] text-zinc-500">
-            Meta Global AI Developer Hackathon 2026 • Verified Physical & In-Memory Profiling
-          </p>
-        </div>
-      </footer>
+        </footer>
+      </div>
     </div>
   );
 }

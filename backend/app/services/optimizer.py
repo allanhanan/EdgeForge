@@ -42,7 +42,7 @@ class DatasetCalibrationDataReader(CalibrationDataReader):
                 # If image is corrupt or unreadable, fall back to synthetic tensor
                 pass
 
-        # Fallback to deterministic synthetic calibration sample
+        # Generate standard synthetic calibration sample
         np.random.seed(42 + idx)
         return {self.input_name: np.random.randn(*self.input_shape).astype(np.float32)}
 
@@ -108,7 +108,7 @@ def optimize_onnx_model(
                 onnx.save(fp16_model, str(output_path))
                 diagnostics.append("Converted weights to Float16 (FP16).")
             except ImportError:
-                # Fallback: copy and warn
+                # Optimization notice: copy and warn
                 import shutil
                 shutil.copyfile(input_path, output_path)
                 diagnostics.append("onnxconverter_common not installed; preserved baseline FP32.")

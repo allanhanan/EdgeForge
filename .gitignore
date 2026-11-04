@@ -10,8 +10,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -31,6 +31,7 @@ ENV/
 
 # Node & Next.js
 frontend/node_modules/
+node_modules/
 frontend/.next/
 frontend/out/
 frontend/build/
@@ -39,6 +40,12 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+*.tsbuildinfo
+next-env.d.ts
+
+# Ensure frontend source lib is never ignored
+!frontend/src/lib/
+!frontend/src/lib/**
 
 # Environment & Credentials
 .env
@@ -50,6 +57,7 @@ pnpm-debug.log*
 *.key
 
 # Database and Storage runtime data (keep directory structure)
+/storage/
 backend/storage/*.db
 backend/storage/*.db-journal
 backend/storage/models/*
@@ -62,12 +70,16 @@ backend/storage/exports/*
 !backend/storage/exports/.gitkeep
 backend/storage/calibration/*
 !backend/storage/calibration/.gitkeep
+backend/storage/runs/*
+!backend/storage/runs/.gitkeep
 
 # Verification and testing artifacts
 verification_screenshots/
 *.png
 *.jpg
 !sample_assets/datasets/edge_val_dataset/images/*.jpg
+!dashboard_populated.png
+!dashboard_verification.png
 
 # OS & Editor
 .DS_Store
