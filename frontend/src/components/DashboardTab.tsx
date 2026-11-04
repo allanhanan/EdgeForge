@@ -16,6 +16,7 @@ import {
   Zap,
   ArrowRight,
   ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -52,6 +53,7 @@ export interface DashboardTabProps {
   onClearGoal?: () => void;
   onRefreshData?: () => void;
   onSelectForCompare?: (runId: string) => void;
+  onStartReplay?: () => void;
 }
 
 interface DiagnosticEvent {
@@ -103,6 +105,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   onQuickBenchmark,
   onRefreshData,
   onSelectForCompare,
+  onStartReplay,
 }) => {
   const [isSeeding, setIsSeeding] = useState(false);
   const [seedMessage, setSeedMessage] = useState<string | null>(null);
@@ -416,7 +419,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       const hw = hwMap.get(r.hardware_id);
       const isOk = r.verified !== false;
       const timeStr = r.created_at
-        ? new Date(r.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+        ? new Date(r.created_at).toISOString().slice(11, 19)
         : `14:0${idx}:00`;
       return {
         id: `run-ev-${r.id}`,
@@ -466,6 +469,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             <Layers className="h-3.5 w-3.5 text-[#f59f00]" />
             <span>Register Model</span>
           </button>
+          {onStartReplay && (
+            <button
+              id="dashboard-start-replay-btn"
+              onClick={onStartReplay}
+              className="bg-[#f59f00]/10 hover:bg-[#f59f00]/20 border border-[#f59f00]/50 text-[#f59f00] hover:text-white px-3 py-1.5 rounded-sm text-xs transition-colors flex items-center gap-1.5 cursor-pointer font-medium shadow-sm"
+              title="Launch Interactive Replay Mode"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-[#f59f00]" />
+              <span>Interactive Replay</span>
+            </button>
+          )}
           <button
             onClick={() => setActiveTab("agent")}
             className="bg-[#22252b] hover:bg-[#2c3235] border border-[#2c3235] text-[#ccccdc] hover:text-white px-3 py-1.5 rounded-sm text-xs transition-colors flex items-center gap-1.5 cursor-pointer font-medium"

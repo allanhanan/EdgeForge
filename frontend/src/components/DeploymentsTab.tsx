@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Package,
   Download,
@@ -27,6 +27,7 @@ import {
   verifyDeployment,
 } from "@/lib/api";
 import { TabType, WorkflowGoal } from "./Navigation";
+import { useReplay } from "@/components/replay";
 
 interface DeploymentsTabProps {
   models: ModelRecord[];
@@ -173,8 +174,117 @@ export const DeploymentsTab: React.FC<DeploymentsTabProps> = ({
 
   // Manifest modal state
   const [inspectingManifest, setInspectingManifest] = useState<DeploymentPackageItem | null>(null);
+
+  const { isReplayMode, currentStage } = useReplay();
+
   // Active manifest tab in inspection viewer
-  const [manifestViewTab, setManifestViewTab] = useState<"requirements" | "manifest" | "checksums">("requirements");
+  const [manifestViewTab, setManifestViewTab] = useState<
+    "requirements" | "manifest" | "checksums" | "dockerfile" | "launch"
+  >("requirements");
+
+  useEffect(() => {
+    const tab = currentStage?.data?.deployments?.activeViewTab;
+    if (isReplayMode && tab) {
+      const frame = requestAnimationFrame(() => {
+        setManifestViewTab(tab);
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [isReplayMode, currentStage]);
+
+  const defaultDockerfile = `# =========================================================================
+# EdgeForge Production Container: Edge Tiny YOLO (INT8)
+# Target Silicon: Raspberry Pi 5 / Hailo-8 M.2 & Intel x86 CPU
+# =========================================================================
+
+FROM python:3.11-slim AS runtime
+
+WORKDIR /app
+
+# Install native runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \\
+    libgomp1 \\
+    curl \\
+    && rm -rf /var/lib/apt/lists/*
+
+# Install minimal inference dependencies (no heavy training frameworks)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy verified model weights, driver, and cryptographic manifest
+COPY model.onnx .
+COPY infer.py .
+COPY manifest.json .
+COPY config.json .
+
+# Pre-warm runtime buffer and verify checksums
+RUN python infer.py --iterations 5 --warmup 2
+
+EXPOSE 8080
+ENTRYPOINT ["python", "infer.py", "--model", "model.onnx", "--iterations", "100"]`;
+
+  const defaultLaunchCommand = `docker run --rm --ipc=host -v /dev/hailo0:/dev/hailo0 edgeforge-yolo:latest
+# Or run standalone Python host inference:
+python infer.py --model model.onnx --iterations 100`;
+
+  const replayPackage: DeploymentPackageItem = useMemo(() => {
+    const depData = currentStage?.data?.deployments;
+    const bundleId = depData?.bundleId || "edgeforge_bundle_18e93d8f";
+    return {
+      id: "pkg-replay-bundle",
+      version: "v1.0.0-INT8",
+      bundle_id: bundleId,
+      model_id: "edge-tiny-yolo-int8",
+      model_name: "Edge Tiny YOLO (INT8 Quantized)",
+      hardware_id: "rpi5-hailo8",
+      hardware_name: "Raspberry Pi 5 + Hailo-8 M.2 (26 TOPS)",
+      runtime: "hailort",
+      precision: "INT8",
+      build_timestamp: "2026-11-04 13:10:00 UTC",
+      size_bytes: 406528,
+      verification_status: "Verified",
+      zero_copy_verified: true,
+      zero_copy_mode: "mmap-direct DMA",
+      zip_path: `/tmp/edgeforge/exports/${bundleId}.zip`,
+      download_url: `/api/v1/deployments/download/${bundleId}`,
+      manifest: (depData?.manifestJson as Record<string, unknown>) || {
+        bundle_id: bundleId,
+        version: "1.0.0",
+        model_name: "Edge Tiny YOLO (INT8 Quantized)",
+        target_hardware: "Raspberry Pi 5 + Hailo-8 M.2",
+        runtime: "hailort / onnxruntime",
+        precision: "int8",
+        median_latency_ms: 1.2,
+        throughput_fps: 833.3,
+        zero_copy_verified: true,
+        checksum: "sha256:3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e",
+      },
+      files: [
+        "model.onnx",
+        "infer.py",
+        "manifest.json",
+        "requirements.txt",
+        "config.json",
+        "checksums.sha256",
+        "Dockerfile",
+        "README.md",
+      ],
+      verificationResult: {
+        bundle_id: bundleId,
+        verification_status: "PASSED",
+        zero_copy_verified: true,
+        returncode: 0,
+        stdout:
+          `[VERIFY] Loading bundle manifest: ${bundleId}.zip\\n` +
+          `[VERIFY] Model SHA-256: 3d2e1f0a9b8c... MATCHED\\n` +
+          `[VERIFY] Initializing HailoRT DMA buffer pool (posix_shm, 64-byte aligned)...\\n` +
+          `[VERIFY] Zero-copy memory mapping verified (0 CPU memcpy overhead).\\n` +
+          `[VERIFY] Executing 10 self-test inference iterations: PASSED (1.20ms avg).\\n` +
+          `[SUCCESS] Deployment bundle integrity: 100% VERIFIED\\n`,
+        stderr: "",
+      },
+    };
+  }, [currentStage]);
 
   // Generate packages from runs or default seed
   const runsPackages = useMemo<DeploymentPackageItem[]>(() => {
@@ -284,7 +394,9 @@ export const DeploymentsTab: React.FC<DeploymentsTabProps> = ({
 
   // Combined packages list merging custom and run-derived packages with any verification overrides
   const allPackages = useMemo<DeploymentPackageItem[]>(() => {
-    const combined = [...customPackages, ...runsPackages];
+    const combined = isReplayMode
+      ? [replayPackage, ...customPackages, ...runsPackages]
+      : [...customPackages, ...runsPackages];
     return combined.map((p) => {
       const override = verificationOverrides[p.id];
       if (override) {
@@ -297,7 +409,7 @@ export const DeploymentsTab: React.FC<DeploymentsTabProps> = ({
       }
       return p;
     });
-  }, [customPackages, runsPackages, verificationOverrides]);
+  }, [isReplayMode, replayPackage, customPackages, runsPackages, verificationOverrides]);
 
   // Current active package
   const activePackage = useMemo<DeploymentPackageItem | null>(() => {
@@ -1044,7 +1156,7 @@ Execution bundle validated for immediate physical deployment.`,
             {/* Dependency Manifests Viewer (5 cols) */}
             <div className="lg:col-span-5 border border-[#2c3235] bg-[#141619] rounded-sm flex flex-col">
               <div className="px-3 py-2 bg-[#1f2328] border-b border-[#2c3235] flex items-center justify-between">
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 flex-wrap">
                   <button
                     type="button"
                     onClick={() => setManifestViewTab("requirements")}
@@ -1078,6 +1190,28 @@ Execution bundle validated for immediate physical deployment.`,
                   >
                     checksums.sha256
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setManifestViewTab("dockerfile")}
+                    className={`px-2 py-0.5 rounded-sm text-[10px] font-mono transition-colors ${
+                      manifestViewTab === "dockerfile"
+                        ? "bg-[#181b1f] text-[#5794f2] border border-[#5794f2]/40 font-bold"
+                        : "text-[#8e8e9e] hover:text-[#ccccdc]"
+                    }`}
+                  >
+                    Dockerfile
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setManifestViewTab("launch")}
+                    className={`px-2 py-0.5 rounded-sm text-[10px] font-mono transition-colors ${
+                      manifestViewTab === "launch"
+                        ? "bg-[#181b1f] text-[#73bf69] border border-[#73bf69]/40 font-bold"
+                        : "text-[#8e8e9e] hover:text-[#ccccdc]"
+                    }`}
+                  >
+                    Launch Command
+                  </button>
                 </div>
                 <CopyButton
                   text={
@@ -1085,7 +1219,11 @@ Execution bundle validated for immediate physical deployment.`,
                       ? dependencySpec
                       : manifestViewTab === "manifest"
                       ? JSON.stringify(activePackage.manifest || {}, null, 2)
-                      : activeArtifacts.map((a) => `${a.sha256}  ${a.filename}`).join("\n")
+                      : manifestViewTab === "checksums"
+                      ? activeArtifacts.map((a) => `${a.sha256}  ${a.filename}`).join("\n")
+                      : manifestViewTab === "dockerfile"
+                      ? (currentStage?.data?.deployments?.dockerfileContent || defaultDockerfile)
+                      : (currentStage?.data?.deployments?.launchCommand || defaultLaunchCommand)
                   }
                   label="Copy"
                 />
@@ -1096,6 +1234,10 @@ Execution bundle validated for immediate physical deployment.`,
                 {manifestViewTab === "manifest" && JSON.stringify(activePackage.manifest || {}, null, 2)}
                 {manifestViewTab === "checksums" &&
                   activeArtifacts.map((a) => `${a.sha256}  ${a.filename}`).join("\n")}
+                {manifestViewTab === "dockerfile" &&
+                  (currentStage?.data?.deployments?.dockerfileContent || defaultDockerfile)}
+                {manifestViewTab === "launch" &&
+                  (currentStage?.data?.deployments?.launchCommand || defaultLaunchCommand)}
               </div>
 
               <div className="p-2 bg-[#181b1f] border-t border-[#2c3235] text-[11px] font-mono text-[#8e8e9e] flex items-center justify-between">
@@ -1104,15 +1246,33 @@ Execution bundle validated for immediate physical deployment.`,
                     ? "Pinned pip dependencies with hash verification"
                     : manifestViewTab === "manifest"
                     ? "Cryptographic model & hardware execution manifest"
-                    : "NIST-compliant SHA-256 signatures"}
+                    : manifestViewTab === "checksums"
+                    ? "NIST-compliant SHA-256 signatures"
+                    : manifestViewTab === "dockerfile"
+                    ? "Production multi-stage edge container definition"
+                    : "Zero-dependency containerized runtime launch command"}
                 </span>
                 <CopyButton
                   text={
                     manifestViewTab === "requirements"
                       ? "pip install -r requirements.txt"
-                      : "sha256sum -c checksums.sha256"
+                      : manifestViewTab === "manifest"
+                      ? "cat manifest.json"
+                      : manifestViewTab === "checksums"
+                      ? "sha256sum -c checksums.sha256"
+                      : manifestViewTab === "dockerfile"
+                      ? (currentStage?.data?.deployments?.dockerfileContent || defaultDockerfile)
+                      : (currentStage?.data?.deployments?.launchCommand || defaultLaunchCommand)
                   }
-                  label={manifestViewTab === "requirements" ? "Install Command" : "Verify Hashes"}
+                  label={
+                    manifestViewTab === "requirements"
+                      ? "Install Command"
+                      : manifestViewTab === "checksums"
+                      ? "Verify Hashes"
+                      : manifestViewTab === "dockerfile"
+                      ? "Copy Dockerfile"
+                      : "Copy Command"
+                  }
                 />
               </div>
             </div>

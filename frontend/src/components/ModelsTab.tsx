@@ -18,6 +18,7 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronUp,
+  GitBranch,
 } from "lucide-react";
 import {
   ModelRecord,
@@ -27,6 +28,7 @@ import {
   quantizeModel,
   fetchCompatibilityMatrix,
 } from "@/lib/api";
+import { REPLAY_ONNX_NODES, type OnnxGraphNode } from "@/context/ReplayContext";
 
 interface ModelsTabProps {
   models: ModelRecord[];
@@ -135,6 +137,24 @@ export const ModelsTab: React.FC<ModelsTabProps> = ({
   const [compatModalOpen, setCompatModalOpen] = useState(false);
   const [compatData, setCompatData] = useState<CompatibilityMatrixData | null>(null);
   const [isCheckingCompat, setIsCheckingCompat] = useState(false);
+
+
+  const [graphViewMode, setGraphViewMode] = useState<"flow" | "list">("flow");
+  const [graphSearchQuery, setGraphSearchQuery] = useState("");
+  const [graphCategoryFilter, setGraphCategoryFilter] = useState("ALL");
+  const [selectedGraphNode, setSelectedGraphNode] = useState<OnnxGraphNode | null>(null);
+
+  const filteredGraphNodes = useMemo(() => {
+    return REPLAY_ONNX_NODES.filter((node) => {
+      const matchesSearch =
+        node.name.toLowerCase().includes(graphSearchQuery.toLowerCase()) ||
+        node.opType.toLowerCase().includes(graphSearchQuery.toLowerCase());
+      const matchesCategory =
+        graphCategoryFilter === "ALL" || node.category === graphCategoryFilter;
+      return matchesSearch && matchesCategory;
+    });
+  }, [graphSearchQuery, graphCategoryFilter]);
+
 
   // Helper to extract clean spatial resolution
   const getInputResolution = (model: ModelRecord): string => {
@@ -890,6 +910,246 @@ export const ModelsTab: React.FC<ModelsTabProps> = ({
                     <p className="font-sans text-[11px] text-[#5794f2]">INT8 Quantized HAR</p>
                   </div>
                 </div>
+              </div>
+
+              {/* ONNX Graph Visualizer & Operator Topology */}
+              <div className="space-y-3 pt-3 border-t border-[#2c3235]">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <GitBranch className="h-4 w-4 text-[#5794f2]" />
+                    <span className="font-sans font-semibold text-xs text-white">
+                      ONNX Operator Graph &amp; Execution Topology
+                    </span>
+                    <span className="text-[10px] bg-[#5794f2]/10 text-[#5794f2] border border-[#5794f2]/30 px-1.5 py-0.5 rounded-sm font-mono">
+                      {REPLAY_ONNX_NODES.length} nodes
+                    </span>
+                  </div>
+
+                  {/* View Controls & Filter */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center bg-[#111217] border border-[#2c3235] rounded-sm p-0.5 text-[11px] font-sans">
+                      <button
+                        onClick={() => setGraphViewMode("flow")}
+                        className={`px-2 py-0.5 rounded-sm font-medium transition-colors ${
+                          graphViewMode === "flow" ? "bg-[#22252b] text-white" : "text-[#8e8e9e] hover:text-[#ccccdc]"
+                        }`}
+                      >
+                        Flowchart
+                      </button>
+                      <button
+                        onClick={() => setGraphViewMode("list")}
+                        className={`px-2 py-0.5 rounded-sm font-medium transition-colors ${
+                          graphViewMode === "list" ? "bg-[#22252b] text-white" : "text-[#8e8e9e] hover:text-[#ccccdc]"
+                        }`}
+                      >
+                        Table
+                      </button>
+                    </div>
+
+                    <div className="relative">
+                      <Search className="h-3.5 w-3.5 text-[#8e8e9e] absolute left-2 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="Search nodes..."
+                        value={graphSearchQuery}
+                        onChange={(e) => setGraphSearchQuery(e.target.value)}
+                        className="bg-[#111217] border border-[#2c3235] text-white text-[11px] font-sans pl-7 pr-2 py-1 rounded-sm focus:outline-none focus:border-[#5794f2] w-32"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Category Filter Pills */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] font-sans text-[#8e8e9e] mr-1">Filter Op:</span>
+                  {["ALL", "conv", "norm", "activation", "pooling", "fusion", "output"].map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setGraphCategoryFilter(cat)}
+                      className={`text-[10px] px-2 py-0.5 rounded-sm uppercase font-mono font-medium border transition-colors ${
+                        graphCategoryFilter === cat
+                          ? "bg-[#5794f2] border-[#5794f2] text-white"
+                          : "bg-[#111217] border-[#2c3235] text-[#8e8e9e] hover:text-[#ccccdc] hover:border-[#384047]"
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Flowchart Visualizer */}
+                {graphViewMode === "flow" ? (
+                  <div className="bg-[#111217] border border-[#2c3235] rounded-sm p-4 overflow-x-auto">
+                    <div className="flex items-center gap-2 min-w-max py-2">
+                      {/* Input Node */}
+                      <div className="flex flex-col items-center justify-center p-2.5 rounded-sm bg-[#181b1f] border border-[#5794f2]/40 text-center min-w-[110px]">
+                        <span className="text-[10px] font-mono text-[#5794f2] uppercase tracking-wider font-semibold">
+                          Graph Input
+                        </span>
+                        <span className="text-xs font-mono text-white font-medium">images</span>
+                        <span className="text-[10px] font-mono text-[#8e8e9e] mt-0.5">[1, 3, 640, 640]</span>
+                      </div>
+
+                      <ArrowRight className="h-4 w-4 text-[#464c54] shrink-0" />
+
+                      {/* Filtered Nodes */}
+                      {filteredGraphNodes.map((node, idx) => {
+                        const isSelected = selectedGraphNode?.id === node.id;
+                        let badgeColor = "bg-[#5794f2]/10 text-[#5794f2] border-[#5794f2]/30";
+                        if (node.category === "activation") badgeColor = "bg-[#73bf69]/10 text-[#73bf69] border-[#73bf69]/30";
+                        if (node.category === "pooling") badgeColor = "bg-[#f59f00]/10 text-[#f59f00] border-[#f59f00]/30";
+                        if (node.category === "fusion") badgeColor = "bg-[#d470a1]/10 text-[#d470a1] border-[#d470a1]/30";
+                        if (node.category === "norm") badgeColor = "bg-[#8e8e9e]/10 text-[#ccccdc] border-[#8e8e9e]/30";
+                        if (node.category === "output") badgeColor = "bg-[#73bf69]/10 text-[#73bf69] border-[#73bf69]/30";
+
+                        return (
+                          <React.Fragment key={node.id}>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedGraphNode(node)}
+                              className={`flex flex-col items-start p-2.5 rounded-sm text-left transition-all min-w-[130px] border cursor-pointer ${
+                                isSelected
+                                  ? "bg-[#22252b] border-[#5794f2] shadow-md shadow-[#5794f2]/10"
+                                  : "bg-[#181b1f] border-[#2c3235] hover:border-[#464c54]"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between w-full mb-1">
+                                <span className={`text-[9px] font-mono font-medium px-1.5 py-0.5 rounded-sm border ${badgeColor}`}>
+                                  {node.opType}
+                                </span>
+                                <span className="text-[9px] font-mono text-[#8e8e9e]">#{node.id.replace("node_", "")}</span>
+                              </div>
+                              <span className="text-xs font-mono text-white truncate max-w-[120px] font-medium" title={node.name}>
+                                {node.name.split("/").pop() || node.name}
+                              </span>
+                              <span className="text-[10px] font-mono text-[#8e8e9e] truncate max-w-[120px] mt-0.5">
+                                {node.outputs[0]?.split("/").pop()}
+                              </span>
+                            </button>
+                            {idx < filteredGraphNodes.length - 1 && (
+                              <ArrowRight className="h-3.5 w-3.5 text-[#464c54] shrink-0" />
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+
+                      <ArrowRight className="h-4 w-4 text-[#464c54] shrink-0" />
+
+                      {/* Output Node */}
+                      <div className="flex flex-col items-center justify-center p-2.5 rounded-sm bg-[#181b1f] border border-[#73bf69]/40 text-center min-w-[110px]">
+                        <span className="text-[10px] font-mono text-[#73bf69] uppercase tracking-wider font-semibold">
+                          Graph Output
+                        </span>
+                        <span className="text-xs font-mono text-white font-medium">output0</span>
+                        <span className="text-[10px] font-mono text-[#8e8e9e] mt-0.5">[1, 84, 8400]</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Table / List View */
+                  <div className="bg-[#111217] border border-[#2c3235] rounded-sm overflow-hidden">
+                    <table className="w-full text-left font-mono text-xs">
+                      <thead className="bg-[#181b1f] text-[#8e8e9e] border-b border-[#2c3235]">
+                        <tr>
+                          <th className="py-2 px-3 font-semibold">ID</th>
+                          <th className="py-2 px-3 font-semibold">Op Type</th>
+                          <th className="py-2 px-3 font-semibold">Node Name</th>
+                          <th className="py-2 px-3 font-semibold">Inputs</th>
+                          <th className="py-2 px-3 font-semibold">Outputs</th>
+                          <th className="py-2 px-3 font-semibold">Category</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#2c3235] text-[#ccccdc]">
+                        {filteredGraphNodes.map((n) => {
+                          const isSelected = selectedGraphNode?.id === n.id;
+                          return (
+                            <tr
+                              key={n.id}
+                              onClick={() => setSelectedGraphNode(n)}
+                              className={`cursor-pointer hover:bg-[#1f2328] transition-colors ${
+                                isSelected ? "bg-[#22252b] text-white" : ""
+                              }`}
+                            >
+                              <td className="py-1.5 px-3 text-[#5794f2]">{n.id}</td>
+                              <td className="py-1.5 px-3 font-semibold">{n.opType}</td>
+                              <td className="py-1.5 px-3 text-white truncate max-w-[200px]">{n.name}</td>
+                              <td className="py-1.5 px-3 text-[#8e8e9e] truncate max-w-[180px]">{n.inputs.join(", ")}</td>
+                              <td className="py-1.5 px-3 text-[#73bf69] truncate max-w-[180px]">{n.outputs.join(", ")}</td>
+                              <td className="py-1.5 px-3 uppercase text-[10px] text-[#ccccdc]">{n.category}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Node Inspector Panel */}
+                {selectedGraphNode && (
+                  <div className="bg-[#181b1f] border border-[#2c3235] rounded-sm p-3.5 space-y-2.5">
+                    <div className="flex items-center justify-between border-b border-[#2c3235] pb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono bg-[#5794f2]/20 text-[#5794f2] px-1.5 py-0.5 rounded-sm font-semibold">
+                          NODE INSPECTOR
+                        </span>
+                        <span className="text-xs font-mono text-white font-semibold">{selectedGraphNode.name}</span>
+                        <span className="text-xs font-mono text-[#8e8e9e]">({selectedGraphNode.opType})</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-[#8e8e9e]">Category:</span>
+                        <span className="text-[10px] font-mono text-[#5794f2] uppercase font-medium">{selectedGraphNode.category}</span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs font-mono">
+                      {/* Inputs */}
+                      <div className="bg-[#111217] border border-[#2c3235] p-2.5 rounded-sm space-y-1">
+                        <span className="text-[10px] uppercase text-[#8e8e9e] font-semibold block">Input Tensors</span>
+                        <ul className="space-y-1 text-[11px] text-[#ccccdc]">
+                          {selectedGraphNode.inputs.map((inp, idx) => (
+                            <li key={idx} className="truncate text-[#5794f2] flex items-center gap-1">
+                              <span>•</span>
+                              <span title={inp}>{inp}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* Outputs */}
+                      <div className="bg-[#111217] border border-[#2c3235] p-2.5 rounded-sm space-y-1">
+                        <span className="text-[10px] uppercase text-[#8e8e9e] font-semibold block">Output Tensors</span>
+                        <ul className="space-y-1 text-[11px] text-[#ccccdc]">
+                          {selectedGraphNode.outputs.map((out, idx) => (
+                            <li key={idx} className="truncate text-[#73bf69] flex items-center gap-1">
+                              <span>•</span>
+                              <span title={out}>{out}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* Attributes & Hardware Kernel Mapping */}
+                      <div className="bg-[#111217] border border-[#2c3235] p-2.5 rounded-sm space-y-1">
+                        <span className="text-[10px] uppercase text-[#8e8e9e] font-semibold block">Attributes &amp; Kernel</span>
+                        <div className="text-[11px] text-[#ccccdc] space-y-1">
+                          {Object.keys(selectedGraphNode.attributes).length > 0 ? (
+                            Object.entries(selectedGraphNode.attributes).map(([k, v]) => (
+                              <div key={k} className="flex justify-between">
+                                <span className="text-[#8e8e9e]">{k}:</span>
+                                <span className="text-white font-mono">{JSON.stringify(v)}</span>
+                              </div>
+                            ))
+                          ) : (
+                            <span className="text-[#8e8e9e] italic">No custom attributes</span>
+                          )}
+                          <div className="pt-1.5 border-t border-[#2c3235] text-[10px] text-[#f59f00]">
+                            ⚡ Mapped to: {selectedGraphNode.opType === "Conv" ? "cuDNN implicit GEMM / VNNI Conv" : selectedGraphNode.opType === "BatchNormalization" ? "Fused Conv+BN Scale kernel" : selectedGraphNode.opType === "MaxPool" ? "TensorRT pooling kernel" : "Element-wise SIMD kernel"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

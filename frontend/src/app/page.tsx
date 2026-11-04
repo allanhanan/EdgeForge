@@ -36,13 +36,35 @@ import {
   fetchMetaStatus,
 } from "@/lib/api";
 
-export default function Home() {
-  const [activeTab, setActiveTab] = useState<TabType>("dashboard");
+import {
+  ReplayProvider,
+  useReplay,
+  ReplayToolbar,
+  ScenarioSelectorModal,
+} from "@/components/replay";
+import { Sparkles, Play, Layers, X } from "lucide-react";
+
+function MainContent() {
+  const {
+    isReplayActive,
+    isReplayMode,
+    activeTab,
+    setReplayActiveTab,
+    currentStage,
+    startScenario,
+    openScenarioModal,
+    closeScenarioModal,
+    isModalOpen,
+    isMinimized,
+  } = useReplay();
+
+  const [showReplayBanner, setShowReplayBanner] = useState<boolean>(true);
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() =>
     typeof window !== "undefined" ? window.innerWidth < 768 : false
   );
   const [activeGoal, setActiveGoal] = useState<WorkflowGoal>(null);
-  const [isOnline, setIsOnline] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
   const [metaStatus, setMetaStatus] = useState<MetaStatus | undefined>(undefined);
 
   const [models, setModels] = useState<ModelRecord[]>([]);
@@ -62,7 +84,7 @@ export default function Home() {
     if (!goal) return;
     const target = WORKFLOW_GOALS.find((g) => g.id === goal);
     if (target) {
-      setActiveTab(target.targetTab);
+      setReplayActiveTab(target.targetTab);
     }
   };
 
@@ -72,7 +94,7 @@ export default function Home() {
 
   const handleAskAI = (query: string) => {
     setAgentInitialQuery(`${query}__${Date.now()}`);
-    setActiveTab("agent");
+    setReplayActiveTab("agent");
   };
 
   const loadData = useCallback(async () => {
@@ -90,7 +112,7 @@ export default function Home() {
       if (hRes.status === "fulfilled" && hRes.value?.status === "online") {
         setIsOnline(true);
       } else {
-        setIsOnline(false);
+        setIsOnline(isReplayMode);
       }
 
       if (hwRes.status === "fulfilled") setHardware(hwRes.value);
@@ -100,9 +122,9 @@ export default function Home() {
       if (rRes.status === "fulfilled") setRuns(rRes.value);
       if (msRes.status === "fulfilled") setMetaStatus(msRes.value);
     } catch {
-      setIsOnline(false);
+      setIsOnline(isReplayMode);
     }
-  }, []);
+  }, [isReplayMode]);
 
   useEffect(() => {
     let mounted = true;
@@ -119,27 +141,45 @@ export default function Home() {
     };
   }, [loadData]);
 
+  // Feed active replay data when in replay mode
+  const effectiveModels = isReplayMode && currentStage ? (currentStage?.data?.models || currentStage?.snapshot?.models || models) : models;
+  const effectiveHardware = isReplayMode && currentStage ? (currentStage?.data?.hardware || currentStage?.snapshot?.hardware || hardware) : hardware;
+  const effectiveDatasets = isReplayMode && currentStage ? (currentStage?.data?.datasets || currentStage?.snapshot?.datasets || datasets) : datasets;
+  const effectiveExperiments = isReplayMode && currentStage ? (currentStage?.data?.experiments || currentStage?.snapshot?.experiments || experiments) : experiments;
+  const effectiveRuns = isReplayMode && currentStage ? (currentStage?.data?.runs || currentStage?.snapshot?.runs || runs) : runs;
+  const effectiveMetaStatus = isReplayMode && currentStage ? (currentStage?.data?.metaStatus || currentStage?.snapshot?.metaStatus || metaStatus) : metaStatus;
+  const effectiveModelId = isReplayMode && currentStage
+    ? (currentStage?.selectedModelId ?? currentStage?.data?.selectedModelId ?? preselectedModelId)
+    : preselectedModelId;
+  const effectiveRunId = isReplayMode && currentStage
+    ? (currentStage?.selectedRunId ?? currentStage?.data?.selectedRunId ?? preselectedRunId)
+    : preselectedRunId;
+
   const handleSelectModelForBenchmark = (modelId: string) => {
     setPreselectedModelId(modelId);
-    setActiveTab("workbench");
+    setReplayActiveTab("workbench");
   };
 
   const handleSelectDatasetForBenchmark = (datasetId: string) => {
     setPreselectedDatasetId(datasetId);
-    setActiveTab("workbench");
+    setReplayActiveTab("workbench");
   };
 
   const handleSelectForCompare = (runId: string) => {
     setPreselectedRunId(runId);
-    setActiveTab("compare");
+    setReplayActiveTab("compare");
   };
 
   return (
-    <div className="min-h-screen bg-[#111217] text-[#ccccdc] flex font-sans">
+    <div
+      className={`min-h-screen bg-[#111217] text-[#ccccdc] flex font-sans ${
+        isReplayActive && !isMinimized ? "pb-28" : "pb-14"
+      }`}
+    >
       {/* Persistent Vertical Sidebar */}
       <Sidebar
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={setReplayActiveTab}
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
       />
@@ -149,27 +189,82 @@ export default function Home() {
         {/* Compact Top Bar */}
         <TopBar
           activeTab={activeTab}
-          setActiveTab={setActiveTab}
+          setActiveTab={setReplayActiveTab}
           isOnline={isOnline}
-          metaStatus={metaStatus}
+          metaStatus={effectiveMetaStatus}
           onRefresh={loadData}
           activeGoal={activeGoal}
           onClearGoal={handleClearGoal}
           onSelectGoal={handleSelectGoal}
+          isReplayActive={isReplayActive}
+          onOpenReplay={openScenarioModal}
         />
+
+        {/* Replay Mode Fast Entry Bar for Judges & Visitors */}
+        {!isReplayActive && showReplayBanner && (
+          <div className="bg-[#181b1f] border-b border-[#f59f00]/40 px-4 py-2.5 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs font-sans select-none animate-in slide-in-from-top-1 duration-150">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-[#22252b] border border-[#f59f00]/40 text-[#f59f00] shrink-0">
+                <Sparkles className="h-4 w-4 fill-[#f59f00]/20 text-[#f59f00]" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold text-white tracking-wide">
+                    EXPLORE EDGEFORGE IN REPLAY MODE
+                  </span>
+                  <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded-sm bg-[#f59f00]/15 text-[#f59f00] border border-[#f59f00]/40 uppercase">
+                    NO SETUP REQUIRED
+                  </span>
+                  <span className="text-[11px] text-[#8e8e9e] hidden lg:inline">
+                    • Zero hardware or cloud credentials needed
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#8e8e9e] line-clamp-1 mt-0.5">
+                  Experience full platform capabilities: YOLOv8 model inspection, Jetson & Hailo-8 physical benchmarking, INT8 entropy quantization, multi-device Pareto frontier analysis, and autonomous AI recommendations.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
+              <button
+                id="btn-launch-featured-demo"
+                onClick={() => startScenario("featured-e2e")}
+                className="h-7 px-3 rounded-sm bg-[#f59f00] hover:bg-[#e08e00] text-black font-semibold text-xs flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+              >
+                <Play className="h-3 w-3 fill-black text-black" />
+                <span>Launch Featured Demo (4m)</span>
+              </button>
+              <button
+                id="btn-browse-scenarios"
+                onClick={openScenarioModal}
+                className="h-7 px-2.5 rounded-sm bg-[#22252b] hover:bg-[#2c3235] border border-[#2c3235] text-xs font-sans text-[#ccccdc] flex items-center gap-1 transition-colors"
+              >
+                <Layers className="h-3 w-3 text-[#5794f2]" />
+                <span>Browse 7 Scenarios ▾</span>
+              </button>
+              <button
+                onClick={() => setShowReplayBanner(false)}
+                className="h-7 w-7 rounded-sm text-[#8e8e9e] hover:text-[#ccccdc] hover:bg-[#22252b] flex items-center justify-center transition-colors"
+                title="Dismiss banner"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Content area: full-bleed viewport layout */}
         <main className="flex-1 w-full p-4 sm:p-5">
           {activeTab === "dashboard" && (
             <DashboardTab
-              models={models}
-              hardware={hardware}
-              experiments={experiments}
-              runs={runs}
-              setActiveTab={setActiveTab}
-              onSelectTab={setActiveTab}
+              models={effectiveModels}
+              hardware={effectiveHardware}
+              experiments={effectiveExperiments}
+              runs={effectiveRuns}
+              setActiveTab={setReplayActiveTab}
+              onSelectTab={setReplayActiveTab}
               onSelectModel={setPreselectedModelId}
-              onQuickBenchmark={() => setActiveTab("workbench")}
+              onQuickBenchmark={() => setReplayActiveTab("workbench")}
               activeGoal={activeGoal}
               onSelectGoal={handleSelectGoal}
               onClearGoal={handleClearGoal}
@@ -180,16 +275,16 @@ export default function Home() {
 
           {activeTab === "models" && (
             <ModelsTab
-              models={models}
+              models={effectiveModels}
               onRefresh={loadData}
               onSelectForBenchmark={handleSelectModelForBenchmark}
-              initialModelId={preselectedModelId}
+              initialModelId={effectiveModelId}
             />
           )}
 
           {activeTab === "datasets" && (
             <DatasetsTab
-              datasets={datasets}
+              datasets={effectiveDatasets}
               onRefresh={loadData}
               onSelectForBenchmark={handleSelectDatasetForBenchmark}
             />
@@ -197,24 +292,24 @@ export default function Home() {
 
           {activeTab === "hardware" && (
             <HardwareLabTab
-              hardware={hardware}
+              hardware={effectiveHardware}
               onRefresh={loadData}
               activeGoal={activeGoal}
               onClearGoal={handleClearGoal}
-              setActiveTab={(tab: string) => setActiveTab(tab as TabType)}
+              setActiveTab={(tab: string) => setReplayActiveTab(tab as TabType)}
               onSelectGoal={(goal: string) => handleSelectGoal(goal as WorkflowGoal)}
             />
           )}
 
           {activeTab === "workbench" && (
             <WorkbenchTab
-              models={models}
-              hardware={hardware}
-              datasets={datasets}
-              initialModelId={preselectedModelId}
+              models={effectiveModels}
+              hardware={effectiveHardware}
+              datasets={effectiveDatasets}
+              initialModelId={effectiveModelId}
               initialDatasetId={preselectedDatasetId}
               onBenchmarkComplete={loadData}
-              setActiveTab={setActiveTab}
+              setActiveTab={setReplayActiveTab}
               activeGoal={activeGoal}
               onClearGoal={handleClearGoal}
               onAskAI={handleAskAI}
@@ -224,23 +319,23 @@ export default function Home() {
 
           {activeTab === "experiments" && (
             <ExperimentsTab
-              experiments={experiments}
-              runs={runs}
-              models={models}
-              hardware={hardware}
+              experiments={effectiveExperiments}
+              runs={effectiveRuns}
+              models={effectiveModels}
+              hardware={effectiveHardware}
               onRefresh={loadData}
-              setActiveTab={setActiveTab}
+              setActiveTab={setReplayActiveTab}
               onSelectForCompare={handleSelectForCompare}
             />
           )}
 
           {activeTab === "compare" && (
             <CompareTab
-              runs={runs}
-              models={models}
-              hardware={hardware}
-              preselectedRunId={preselectedRunId}
-              setActiveTab={setActiveTab}
+              runs={effectiveRuns}
+              models={effectiveModels}
+              hardware={effectiveHardware}
+              preselectedRunId={effectiveRunId}
+              setActiveTab={setReplayActiveTab}
               onAskAI={handleAskAI}
               activeGoal={activeGoal}
               onClearGoal={handleClearGoal}
@@ -250,13 +345,13 @@ export default function Home() {
 
           {activeTab === "agent" && (
             <AIEngineerTab
-              models={models}
-              hardware={hardware}
-              datasets={datasets}
-              runs={runs}
-              metaStatus={metaStatus}
+              models={effectiveModels}
+              hardware={effectiveHardware}
+              datasets={effectiveDatasets}
+              runs={effectiveRuns}
+              metaStatus={effectiveMetaStatus}
               onRefreshRuns={loadData}
-              setActiveTab={setActiveTab}
+              setActiveTab={setReplayActiveTab}
               initialQuery={agentInitialQuery}
               activeGoal={activeGoal}
               onClearGoal={handleClearGoal}
@@ -265,33 +360,33 @@ export default function Home() {
 
           {activeTab === "deployments" && (
             <DeploymentsTab
-              models={models}
-              runs={runs}
-              hardware={hardware}
+              models={effectiveModels}
+              runs={effectiveRuns}
+              hardware={effectiveHardware}
               activeGoal={activeGoal}
               onClearGoal={handleClearGoal}
               onRefresh={loadData}
-              setActiveTab={setActiveTab}
+              setActiveTab={setReplayActiveTab}
               onSelectGoal={handleSelectGoal}
             />
           )}
 
           {activeTab === "reports" && (
             <ReportsTab
-              models={models}
-              setActiveTab={setActiveTab}
+              models={effectiveModels}
+              setActiveTab={setReplayActiveTab}
               onRefresh={loadData}
             />
           )}
 
           {activeTab === "settings" && (
             <SettingsTab
-              metaStatus={metaStatus}
-              models={models}
-              datasets={datasets}
-              hardware={hardware}
-              experiments={experiments}
-              runs={runs}
+              metaStatus={effectiveMetaStatus}
+              models={effectiveModels}
+              datasets={effectiveDatasets}
+              hardware={effectiveHardware}
+              experiments={effectiveExperiments}
+              runs={effectiveRuns}
               onRefreshAll={loadData}
             />
           )}
@@ -311,6 +406,20 @@ export default function Home() {
           </div>
         </footer>
       </div>
+
+      {/* Floating Replay Controller Bar */}
+      <ReplayToolbar />
+
+      {/* Scenario Selector Modal */}
+      <ScenarioSelectorModal isOpen={isModalOpen} onClose={closeScenarioModal} />
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <ReplayProvider>
+      <MainContent />
+    </ReplayProvider>
   );
 }

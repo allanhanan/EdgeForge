@@ -312,6 +312,8 @@ export interface TopBarProps {
   activeGoal?: WorkflowGoal;
   onClearGoal?: () => void;
   onSelectGoal?: (goal: WorkflowGoal) => void;
+  isReplayActive?: boolean;
+  onOpenReplay?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -319,6 +321,8 @@ export const TopBar: React.FC<TopBarProps> = ({
   onRefresh,
   activeGoal,
   onClearGoal,
+  isReplayActive,
+  onOpenReplay,
 }) => {
   const breadcrumb = getBreadcrumb(activeTab);
 
@@ -370,8 +374,46 @@ export const TopBar: React.FC<TopBarProps> = ({
           <span className="text-[#ccccdc] font-semibold">{breadcrumb.label}</span>
         </div>
 
-        {/* Middle: Workspace selector and Guided Demo */}
+        {/* Middle: Workspace selector and Replay Mode Button */}
         <div className="flex items-center gap-2.5">
+          {onOpenReplay && (
+            <button
+              id="btn-start-replay"
+              onClick={onOpenReplay}
+              className={`flex items-center gap-2 h-7 px-2.5 rounded-sm border text-xs font-sans font-medium transition-all group ${
+                isReplayActive
+                  ? "bg-[#181b1f] border-[#73bf69]/50 text-[#73bf69] hover:bg-[#22252b]"
+                  : "bg-[#181b1f] hover:bg-[#22252b] border-[#f59f00]/60 hover:border-[#f59f00] text-[#f59f00] shadow-[0_0_12px_rgba(245,159,0,0.15)]"
+              }`}
+              title="Explore EdgeForge with pre-recorded scenarios (no hardware or API keys required)"
+            >
+              <span className="flex h-2 w-2 relative">
+                <span
+                  className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                    isReplayActive ? "bg-[#73bf69]" : "bg-[#f59f00]"
+                  }`}
+                />
+                <span
+                  className={`relative inline-flex rounded-full h-2 w-2 ${
+                    isReplayActive ? "bg-[#73bf69]" : "bg-[#f59f00]"
+                  }`}
+                />
+              </span>
+              <span className="font-semibold tracking-wide flex items-center gap-1.5">
+                <span>{isReplayActive ? "LIVE REPLAY" : "▶ REPLAY MODE"}</span>
+                <span
+                  className={`rounded-xs px-1 py-0.2 text-[9px] font-mono border uppercase ${
+                    isReplayActive
+                      ? "bg-[#73bf69]/20 text-[#73bf69] border-[#73bf69]/40"
+                      : "bg-[#f59f00]/20 text-[#f59f00] border-[#f59f00]/40"
+                  }`}
+                >
+                  {isReplayActive ? "ACTIVE" : "DEMO"}
+                </span>
+              </span>
+            </button>
+          )}
+
           <div ref={workspaceRef} className="relative hidden md:block">
             <button
               onClick={() => setWorkspaceOpen((prev) => !prev)}
@@ -490,6 +532,8 @@ export interface NavigationProps {
   onRefresh?: () => void;
   collapsed?: boolean;
   setCollapsed?: (collapsed: boolean | ((prev: boolean) => boolean)) => void;
+  isReplayActive?: boolean;
+  onOpenReplay?: () => void;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
@@ -503,6 +547,8 @@ export const Navigation: React.FC<NavigationProps> = ({
   onRefresh,
   collapsed: controlledCollapsed,
   setCollapsed: controlledSetCollapsed,
+  isReplayActive,
+  onOpenReplay,
 }) => {
   const [internalCollapsed, setInternalCollapsed] = useState(false);
   const isCollapsed = controlledCollapsed !== undefined ? controlledCollapsed : internalCollapsed;
@@ -525,6 +571,8 @@ export const Navigation: React.FC<NavigationProps> = ({
         onClearGoal={onClearGoal}
         onSelectGoal={onSelectGoal}
         onRefresh={onRefresh}
+        isReplayActive={isReplayActive}
+        onOpenReplay={onOpenReplay}
       />
     </>
   );

@@ -22,7 +22,10 @@ import {
   Sparkles,
   Clock,
   ChevronDown,
+  Play,
 } from "lucide-react";
+import { useReplay } from "@/components/replay";
+import { AIEngineerReplayView } from "./ai-engineer/AIEngineerReplayView";
 import {
   ModelRecord,
   DatasetRecord,
@@ -48,7 +51,7 @@ interface AIEngineerTabProps {
   onClearGoal?: () => void;
 }
 
-interface LineageNode {
+export interface LineageNode {
   id: string;
   stepNumber: number;
   label: string;
@@ -64,7 +67,7 @@ interface LineageNode {
   suggestedAction: string;
 }
 
-interface DeploymentPhase {
+export interface DeploymentPhase {
   phase: string;
   milestone: string;
   targetHardware: string;
@@ -148,6 +151,11 @@ export const AIEngineerTab: React.FC<AIEngineerTabProps> = ({
 }) => {
   const [selectedModelId, setSelectedModelId] = useState<string>("");
   const effectiveModelId = selectedModelId || models[0]?.id || "";
+
+  // Replay Mode Integration
+  const { isReplayMode, setIsReplayMode } = useReplay();
+  const [localReplayActive, setLocalReplayActive] = useState<boolean>(false);
+  const isReplayActive = isReplayMode || localReplayActive;
 
   // SLA Constraints
   const [targetLatencyMs, setTargetLatencyMs] = useState<number>(30.0);
@@ -249,8 +257,8 @@ The FP32 baseline on CPU measures **45.0 ms latency (22.2 FPS)**, failing your *
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [expandedTraceStep, setExpandedTraceStep] = useState<number | null>(null);
 
-  // View Switcher: "chat" | "lineage" | "plan"
-  const [activeView, setActiveView] = useState<"chat" | "lineage" | "plan">("chat");
+  // View Switcher: "chat" | "lineage" | "decisions" | "plan"
+  const [activeView, setActiveView] = useState<"chat" | "lineage" | "decisions" | "plan">("chat");
   const [selectedNodeId, setSelectedNodeId] = useState<string>("node-int8");
 
   // Track initialQuery to execute once if supplied
@@ -822,6 +830,21 @@ The FP32 baseline on CPU measures **45.0 ms latency (22.2 FPS)**, failing your *
     }
   };
 
+  if (isReplayActive) {
+    return (
+      <AIEngineerReplayView
+        activeView={activeView}
+        setActiveView={setActiveView}
+        setActiveTab={setActiveTab}
+        onSelectRunForExport={onSelectRunForExport}
+        onExitReplay={() => {
+          if (setIsReplayMode) setIsReplayMode(false);
+          setLocalReplayActive(false);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="space-y-4 text-[#ccccdc] font-sans">
       {/* ========================================================================= */}
@@ -853,6 +876,20 @@ The FP32 baseline on CPU measures **45.0 ms latency (22.2 FPS)**, failing your *
               </span>
               <span>Meta AI Engine · muse-spark-1.3 · Active</span>
             </span>
+
+            {/* Replay Agent Optimization Session Header Trigger */}
+            <button
+              type="button"
+              onClick={() => {
+                if (setIsReplayMode) setIsReplayMode(true);
+                setLocalReplayActive(true);
+              }}
+              className="px-2.5 py-1 rounded-sm border border-[#5794f2]/40 bg-[#5794f2]/10 hover:bg-[#5794f2]/20 text-[#5794f2] transition-colors flex items-center gap-1.5 font-semibold"
+              title="Launch interactive replay mode for AI Engineer"
+            >
+              <Play className="h-3 w-3 fill-current" />
+              Replay Session
+            </button>
 
             <button
               type="button"
@@ -977,6 +1014,55 @@ The FP32 baseline on CPU measures **45.0 ms latency (22.2 FPS)**, failing your *
             </div>
           </div>
         )}
+      </div>
+
+      {/* Dedicated Scenario Control: Replay Agent Optimization Session */}
+      <div className="border border-[#5794f2]/40 bg-gradient-to-r from-[#181b1f] via-[#1f2328] to-[#141619] p-3.5 rounded-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-sm bg-[#5794f2]/10 border border-[#5794f2]/30 text-[#5794f2] shrink-0">
+            <Sparkles className="h-5 w-5 animate-pulse" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-white font-mono">
+                Replay Agent Optimization Session
+              </h2>
+              <span className="text-[10px] font-mono px-2 py-0.2 rounded-sm bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-semibold">
+                Autonomous Jetson Orin Nano Walkthrough
+              </span>
+            </div>
+            <p className="text-xs text-[#8e8e9e] font-mono mt-0.5">
+              Inspect multi-step autonomous coordination: inspect_model_graph &rarr; query_benchmark_telemetry &rarr; run_int8_quantization_plan &rarr; generate_edge_deployment_manifest.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              setLocalReplayActive(true);
+            }}
+            className="px-3 py-2 rounded-sm border border-[#5794f2]/50 bg-[#1f2328] hover:bg-[#262b32] text-[#5794f2] hover:text-white font-semibold text-xs font-mono transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+            title="Watch just the AI Engineer in isolation"
+          >
+            <Play className="h-3 w-3 fill-current" />
+            Watch in Isolation
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (setIsReplayMode) setIsReplayMode(true);
+              setLocalReplayActive(true);
+            }}
+            className="px-3.5 py-2 rounded-sm border border-[#5794f2]/50 bg-[#5794f2] hover:bg-[#4682e0] text-[#0d0f12] font-semibold text-xs font-mono transition-all flex items-center gap-1.5 shadow-sm hover:shadow-md cursor-pointer"
+            title="Launch session as part of the full platform walkthrough"
+          >
+            <Play className="h-3.5 w-3.5 fill-current" />
+            Full Walkthrough Replay
+          </button>
+        </div>
       </div>
 
       {/* Goal Callout if active */}

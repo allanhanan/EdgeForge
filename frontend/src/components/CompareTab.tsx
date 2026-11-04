@@ -29,6 +29,7 @@ import {
   Cell,
 } from "recharts";
 import { BenchmarkRun, ModelRecord, HardwareDevice, compareRuns } from "@/lib/api";
+import { useReplay } from "@/components/replay";
 import { TabType, WorkflowGoal } from "./Navigation";
 
 interface CompareTabProps {
@@ -162,14 +163,23 @@ export const CompareTab: React.FC<CompareTabProps> = ({
   // User-selected run IDs or default selection
   const [userSelectedRunIds, setUserSelectedRunIds] = useState<string[] | null>(null);
 
+  const { isReplayMode, currentStage } = useReplay();
+
   const selectedRunIds = useMemo(() => {
     if (userSelectedRunIds !== null) return userSelectedRunIds;
+    if (isReplayMode && currentStage?.data?.compare?.selectedRunIds?.length) {
+      return currentStage.data.compare.selectedRunIds;
+    }
+    if (isReplayMode && runs.length >= 4) {
+      // In replay mode, show multi-hardware comparison across CPU, GPU, Jetson, and NPU by default
+      return runs.slice(0, 6).map((r) => r.id);
+    }
     if (preselectedRunId && runs.some((r) => r.id === preselectedRunId)) {
       const rest = runs.filter((r) => r.id !== preselectedRunId).slice(0, 2).map((r) => r.id);
       return [preselectedRunId, ...rest];
     }
     return runs.slice(0, 3).map((r) => r.id);
-  }, [userSelectedRunIds, preselectedRunId, runs]);
+  }, [userSelectedRunIds, preselectedRunId, runs, isReplayMode, currentStage]);
 
   const [rawComparedData, setRawComparedData] = useState<ComparedRunItem[]>([]);
 
@@ -257,7 +267,7 @@ export const CompareTab: React.FC<CompareTabProps> = ({
   const toggleRun = (runId: string) => {
     setUserSelectedRunIds(
       selectedRunIds.includes(runId)
-        ? selectedRunIds.filter((id) => id !== runId)
+        ? selectedRunIds.filter((id: string) => id !== runId)
         : [...selectedRunIds, runId]
     );
   };
